@@ -39,7 +39,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Install engine build dependencies
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y gcc make pkg-config zlib1g-dev libcap-dev libnetfilter-queue-dev libmnl-dev libnfnetlink-dev liblua5.4-dev
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y gcc make pkg-config zlib1g-dev libcap-dev libnetfilter-queue-dev libmnl-dev libnfnetlink-dev liblua5.4-dev nftables
       - name: Compare two independent source builds on the same toolchain
         run: |
           bash scripts/build-nfqws2.sh "$RUNNER_TEMP/nfqws2-a"
@@ -49,3 +49,14 @@ jobs:
       - name: Validate the component's compiled argv without packet interception
         run: |
           SOLOVEY_TEST_ENGINE_ROOT="$RUNNER_TEMP/nfqws2-a" go test -count=1 -run '^TestPinnedEngineValidatesProfiles$' -v ./strategy
+      - name: Require fail-closed queue overload in a disposable namespace
+        run: |
+          test "$GITHUB_ACTIONS" = true
+          go test -c -o "$RUNNER_TEMP/zapret-queue-test" ./strategy
+          sudo modprobe nfnetlink_queue
+          sudo modprobe nft_queue
+          sudo unshare --net -- env SOLOVEY_TEST_PARENT_NETNS="$(readlink /proc/self/ns/net)" \
+            SOLOVEY_TEST_ENGINE_ROOT="$RUNNER_TEMP/nfqws2-a" bash -euc '
+              ip link set lo up
+              exec "$1" -test.run "^TestPinnedEngineQueueOverloadDrops$" -test.v -test.timeout=30s
+            ' _ "$RUNNER_TEMP/zapret-queue-test"
