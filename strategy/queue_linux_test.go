@@ -35,6 +35,18 @@ func TestPinnedEngineQueueOverloadDrops(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = client.Close() })
+	// Queued skbs still charge the sender. Exhaust NFQUEUE, not the much
+	// smaller default SO_SNDBUF, with the stopped consumer.
+	raw, err := client.SyscallConn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bufferErr error
+	if err := raw.Control(func(fd uintptr) {
+		bufferErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUFFORCE, 8<<20)
+	}); err != nil || bufferErr != nil {
+		t.Fatalf("enlarge fixture send buffer: %v %v", err, bufferErr)
+	}
 	const queue = 321
 	var logs bytes.Buffer
 	engine := exec.CommandContext(t.Context(), filepath.Join(root, "nfqws2"), fmt.Sprintf("--qnum=%d", queue), "--filter-udp=*")
@@ -80,10 +92,13 @@ add rule inet r8b1_queue_fixture output oifname "lo" ip daddr 127.0.0.1 udp dpor
 		return err == nil && strings.Contains(string(raw), "State:\tT")
 	})
 	var after uint64
+	_ = client.SetWriteDeadline(time.Now().Add(3 * time.Second))
 	for i := 0; i < 128; i++ {
 		for range 128 {
 			// The full queue can surface a synchronous drop error on UDP.
-			_, _ = client.Write([]byte("must not reach the wire"))
+			if _, err := client.Write([]byte("must not reach the wire")); os.IsTimeout(err) {
+				t.Fatal("sender buffer blocked before NFQUEUE's overload counters increased")
+			}
 		}
 		var bound bool
 		if after, bound = queueDrops(t, queue); !bound {
