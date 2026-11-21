@@ -37,7 +37,7 @@ func TestPinnedEngineQueueOverloadDrops(t *testing.T) {
 	t.Cleanup(func() { _ = client.Close() })
 	const queue = 321
 	var logs bytes.Buffer
-	engine := exec.CommandContext(t.Context(), filepath.Join(root, "nfqws2"), fmt.Sprintf("--qnum=%d", queue), "--filter-l4=udp")
+	engine := exec.CommandContext(t.Context(), filepath.Join(root, "nfqws2"), fmt.Sprintf("--qnum=%d", queue), "--filter-udp=*")
 	engine.Dir = root
 	engine.Stdout, engine.Stderr = &logs, &logs
 	if err := engine.Start(); err != nil {
