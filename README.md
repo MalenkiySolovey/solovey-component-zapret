@@ -33,7 +33,10 @@ go test -race -count=1 ./...
 go vet ./...
 ```
 
-The Linux `nfqws2` build and namespace proof are separate, explicitly invoked
-qualification steps. They never download a runtime binary and fail closed when
-the runner lacks NFQUEUE, nftables or the required privilege boundary.
+The Linux source build runs with `bash scripts/build-nfqws2.sh <new-directory>`.
+It requires GCC, Make, pkg-config, Lua 5.4, zlib, libnetfilter-queue, libnfnetlink
+and libmnl development libraries. Producer CI compares two builds on its Linux
+amd64 toolchain and checks compiler output against the real engine. Product
+owns the separate namespace proof; no component code downloads or starts an
+engine at runtime. Neither Windows nor a production Node role is enabled here.
 
