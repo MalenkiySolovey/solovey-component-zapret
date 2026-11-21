@@ -30,5 +30,5 @@ install -m 0644 "$root/upstream/zapret2.json" "$out/source.json"
   sha256sum nfqws2 LICENSE.upstream lua/*.lua source.json > SHA256SUMS
   cat SHA256SUMS
   gcc --version | head -n 1
-  pkg-config --modversion libnetfilter_queue libnfnetlink libmnl zlib lua54
+  pkg-config --modversion libnetfilter_queue libnfnetlink libmnl zlib lua5.4
 )

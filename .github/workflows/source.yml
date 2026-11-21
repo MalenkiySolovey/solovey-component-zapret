@@ -39,7 +39,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Install engine build dependencies
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y gcc make pkg-config zlib1g-dev libnetfilter-queue-dev libmnl-dev libnfnetlink-dev liblua5.4-dev
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y gcc make pkg-config zlib1g-dev libcap-dev libnetfilter-queue-dev libmnl-dev libnfnetlink-dev liblua5.4-dev
       - name: Compare two independent source builds on the same toolchain
         run: |
           bash scripts/build-nfqws2.sh "$RUNNER_TEMP/nfqws2-a"

@@ -34,8 +34,8 @@ go vet ./...
 ```
 
 The Linux source build runs with `bash scripts/build-nfqws2.sh <new-directory>`.
-It requires GCC, Make, pkg-config, Lua 5.4, zlib, libnetfilter-queue, libnfnetlink
-and libmnl development libraries. Producer CI compares two builds on its Linux
+It requires GCC, Make, pkg-config, Lua 5.4, zlib, libcap, libnetfilter-queue,
+libnfnetlink and libmnl development libraries. Producer CI compares two builds on its Linux
 amd64 toolchain and checks compiler output against the real engine. Product
 owns the separate namespace proof; no component code downloads or starts an
 engine at runtime. Neither Windows nor a production Node role is enabled here.
