@@ -18,16 +18,20 @@ printf '%s  %s\n' "$checksum" "$scratch/source.tar.gz" | sha256sum -c -
 mkdir "$scratch/source"
 tar -xzf "$scratch/source.tar.gz" --strip-components=1 -C "$scratch/source"
 export SOURCE_DATE_EPOCH="$epoch" LC_ALL=C TZ=UTC
-make -C "$scratch/source/nfq2" CC=gcc LUA_JIT=0 LUA_VER=5.4
+gcc -std=c99 -Wall -Wextra -Werror -fPIC -c "$root/packaging/nfqueue-policy.c" \
+  -o "$scratch/source/nfq2/solovey-nfqueue-policy.o"
+make -C "$scratch/source/nfq2" CC=gcc LUA_JIT=0 LUA_VER=5.4 \
+  LIBS=solovey-nfqueue-policy.o 'LDFLAGS_PIE=-pie -Wl,--wrap=nfq_set_queue_flags'
 mkdir -- "$out"
 mkdir -- "$out/lua"
 install -m 0755 "$scratch/source/nfq2/nfqws2" "$out/nfqws2"
 install -m 0644 "$scratch/source/docs/LICENSE.txt" "$out/LICENSE.upstream"
 install -m 0644 "$scratch/source/lua/"{zapret-lib,zapret-antidpi}.lua "$out/lua/"
 install -m 0644 "$root/upstream/zapret2.json" "$out/source.json"
+install -m 0644 "$root/packaging/nfqueue-policy.c" "$out/nfqueue-policy.c"
 (
   cd -- "$out"
-  sha256sum nfqws2 LICENSE.upstream lua/*.lua source.json > SHA256SUMS
+  sha256sum nfqws2 LICENSE.upstream lua/*.lua source.json nfqueue-policy.c > SHA256SUMS
   cat SHA256SUMS
   gcc --version | head -n 1
   pkg-config --modversion libnetfilter_queue libnfnetlink libmnl zlib lua5.4

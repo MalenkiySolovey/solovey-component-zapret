@@ -5,3 +5,7 @@ The optional engine build input is bol-van/zapret2 (MIT, copyright 2016-2026
 bol-van). Its exact release source and archive checksum are recorded in
 upstream/zapret2.json. Engine build artifacts include upstream docs/LICENSE.txt
 and its Lua files unmodified. No upstream code is vendored in this module.
+
+The Linux artifact links the separately identified Solovey NFQUEUE policy
+from packaging/nfqueue-policy.c to disable kernel fail-open on queue overload.
+The upstream source archive and its packet processing code are not modified.
