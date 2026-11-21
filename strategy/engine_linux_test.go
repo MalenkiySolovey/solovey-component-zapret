@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,13 +29,11 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	for _, prefix := range [][]string{{"--dry-run", "--intercept=0"}, {"--intercept=0"}} {
-		cmd := exec.CommandContext(ctx, filepath.Join(root, "nfqws2"), append(prefix, argv...)...)
-		cmd.Dir = root
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("nfqws2 %v: %v\n%s", prefix, err, out)
-		}
-		t.Logf("nfqws2 %v:\n%s", prefix, out)
+	cmd := exec.CommandContext(ctx, filepath.Join(root, "nfqws2"), append([]string{"--dry-run", "--intercept=0"}, argv...)...)
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "command line parameters verified") {
+		t.Fatalf("nfqws2 dry-run: %v\n%s", err, out)
 	}
+	t.Logf("nfqws2 dry-run:\n%s", out)
 }
