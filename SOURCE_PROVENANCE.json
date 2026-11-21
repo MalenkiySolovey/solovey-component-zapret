@@ -1,0 +1,11 @@
+{
+  "schema": "solovey.component.source-provenance/v1",
+  "component": "zapret",
+  "policy": "The semantic implementation is source-owned here. The source archive is an immutable external build input; neither the engine nor ZapretGUI is forked or vendored.",
+  "upstream": "upstream/zapret2.json",
+  "sourceOwners": [
+    "github.com/MalenkiySolovey/solovey-component-zapret/strategy",
+    "github.com/MalenkiySolovey/solovey-component-zapret/binding",
+    "github.com/MalenkiySolovey/solovey-component-zapret"
+  ]
+}

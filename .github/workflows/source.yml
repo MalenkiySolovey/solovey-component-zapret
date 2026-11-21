@@ -1,0 +1,62 @@
+name: Zapret component source
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+env:
+  GOWORK: off
+  GOFLAGS: -mod=readonly
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '24.16.0'
+      - run: node scripts/check-source.mjs
+      - run: go test -race -count=1 ./...
+      - run: go vet ./...
+
+  upstream-engine:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Install pinned engine build dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y gcc make pkg-config zlib1g-dev libcap-dev libnetfilter-queue-dev libmnl-dev libnfnetlink-dev libluajit-5.1-dev ca-certificates
+      - name: Download and verify upstream Zapret2 source
+        run: |
+          set -eu
+          url="https://codeload.github.com/bol-van/zapret2/tar.gz/$(node -e "console.log(JSON.parse(require('fs').readFileSync('upstream/zapret2.json')).commit)")"
+          curl -fsSL "$url" -o /tmp/zapret2.tar.gz
+          echo "$(node -e "console.log(JSON.parse(require('fs').readFileSync('upstream/zapret2.json')).archiveSHA256)")  /tmp/zapret2.tar.gz" | sha256sum -c -
+          mkdir /tmp/zapret2
+          tar -xzf /tmp/zapret2.tar.gz --strip-components=1 -C /tmp/zapret2
+          test -f /tmp/zapret2/docs/LICENSE.txt
+      - name: Build source-pinned nfqws2
+        run: make -C /tmp/zapret2/nfq2
+      - name: Validate non-intercepting static strategy command
+        run: |
+          /tmp/zapret2/nfq2/nfqws2 --dry-run --intercept=0 --qnum=401 --fwmark=0x40000000 --filter-mark=0x120000/0xffffffff --filter-tcp=443 --filter-l7=tls --lua-init=@/tmp/zapret2/lua/zapret-lib.lua --lua-init=@/tmp/zapret2/lua/zapret-antidpi.lua
+
+  packet-path:
+    if: ${{ vars.SOLOVEY_R8A_NFQUEUE_PROOF == 'enabled' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: State the privileged proof boundary
+        run: |
+          echo 'PACKET_PATH_NOT_PROVEN: disposable NFQUEUE/conntrack runner is not enabled by default.'
+          echo 'Enable only on a dedicated isolated runner with an explicit disposable namespace contract.'
+          exit 1

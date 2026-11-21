@@ -1,0 +1,4 @@
+github.com/MalenkiySolovey/solovey-host v0.12.0 h1:K58v/AGDSgL9NBvnc5ehRvdA9DDzLz0mNEyXnZZl4ts=
+github.com/MalenkiySolovey/solovey-host v0.12.0/go.mod h1:BUYlv5O5C9TrMoulPD+aNflUfPccG7N9DAJilI3itXI=
+github.com/robfig/cron/v3 v3.0.1 h1:WdRxkvbJztn8LMz/QEvLN5sBU+xKpSqwwUO1Pjr4qDs=
+github.com/robfig/cron/v3 v3.0.1/go.mod h1:eQICP3HwyT7UooqI/z+Ov+PtYAWygg1TEWWzGIFLtro=

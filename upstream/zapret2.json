@@ -1,0 +1,11 @@
+{
+  "schema": "solovey.zapret2-upstream/v1",
+  "repository": "https://github.com/bol-van/zapret2.git",
+  "commit": "038c97e5819df10f8e8c22a2f1fffe57f2f7379b",
+  "tree": "74dbe47147ad756c480141703da5828c066eb117",
+  "tag": "v1.0.7",
+  "archiveSHA256": "f31711fa2dc94135bd295542c8024e5db8f6adf71d4c542f7289f3e04347e29d",
+  "engine": "nfqws2",
+  "license": "MIT",
+  "licensePath": "docs/LICENSE.txt"
+}
