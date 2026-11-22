@@ -1,0 +1,133 @@
+package strategy
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/MalenkiySolovey/solovey-host/network/intent"
+)
+
+const MaxNativeBytes = 8 << 10
+
+// ParseNative accepts only the profile fields supported by the installed
+// IPv4/TCP compiler. Raw text is an editor input, never runnable engine argv.
+// The caller can retain text unchanged for a lossless raw round trip.
+func ParseNative(id, text string) (Strategy, error) {
+	if len(text) > MaxNativeBytes {
+		return Strategy{}, fmt.Errorf("%w: native text exceeds %d bytes", ErrInvalidStrategy, MaxNativeBytes)
+	}
+	for _, c := range text {
+		if !(c >= ' ' && c <= '~' || c == '\n' || c == '\r' || c == '\t') {
+			return Strategy{}, fmt.Errorf("%w: expected plain native options", ErrInvalidStrategy)
+		}
+	}
+	type draft struct {
+		Profile
+		l7   string
+		seen map[string]bool
+	}
+	first := func(id string) draft {
+		return draft{Profile: Profile{ID: id, Protocol: intent.PacketProtocolTCP}, seen: map[string]bool{}}
+	}
+	current := first("profile-1")
+	value := Strategy{Schema: Schema, ID: id}
+	finish := func() error {
+		if !current.seen["--filter-tcp"] || current.seen["--payload"] != current.seen["--lua-desync"] ||
+			current.seen["--filter-l7"] != (current.SplitAt != 0) ||
+			current.SplitAt != 0 && payloadProtocol(current.Payload) != current.l7 {
+			return fmt.Errorf("%w: incomplete or inconsistent native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
+		}
+		if current.SplitAt != 0 {
+			value.Assets = []AssetRef{Library, Actions}
+		}
+		value.Profiles = append(value.Profiles, current.Profile)
+		return nil
+	}
+	for i, arg := range strings.Fields(text) {
+		key, input, hasValue := strings.Cut(arg, "=")
+		if key == "--new" {
+			if err := finish(); err != nil {
+				return Strategy{}, err
+			}
+			if len(value.Profiles) >= 16 {
+				return Strategy{}, fmt.Errorf("%w: too many native profiles", ErrInvalidStrategy)
+			}
+			current = first(fmt.Sprintf("profile-%d", len(value.Profiles)+1))
+			if hasValue {
+				current.ID = input
+				current.seen["--name"] = true
+			}
+			continue
+		}
+		bad := fmt.Errorf("%w: unsupported or malformed native option %d", ErrInvalidStrategy, i+1)
+		if !hasValue || input == "" || current.seen[key] {
+			return Strategy{}, bad
+		}
+		current.seen[key] = true
+		switch key {
+		case "--name":
+			current.ID = input
+		case "--filter-tcp":
+			for _, port := range strings.Split(input, ",") {
+				n, err := strconv.ParseUint(port, 10, 16)
+				if err != nil || n == 0 || len(current.Ports) >= 32 {
+					return Strategy{}, bad
+				}
+				current.Ports = append(current.Ports, uint16(n))
+			}
+		case "--filter-l7":
+			if input != "tls" && input != "http" {
+				return Strategy{}, bad
+			}
+			current.l7 = input
+		case "--payload":
+			current.Payload = Payload(input)
+		case "--lua-desync":
+			pos, ok := strings.CutPrefix(input, "multisplit:pos=")
+			n, err := strconv.ParseUint(pos, 10, 16)
+			if !ok || err != nil || n == 0 {
+				return Strategy{}, bad
+			}
+			current.SplitAt = uint16(n)
+		default:
+			return Strategy{}, bad
+		}
+	}
+	if err := finish(); err != nil {
+		return Strategy{}, err
+	}
+	return Seal(value)
+}
+
+// FormatNative is used only when a visual edit changes the parsed profiles.
+// It omits all runtime-owned flags and asset paths.
+func FormatNative(value Strategy) (string, error) {
+	value, err := Seal(value)
+	if err != nil {
+		return "", err
+	}
+	var text strings.Builder
+	for i, profile := range value.Profiles {
+		if value.NeedsReturn || profile.Protocol != intent.PacketProtocolTCP {
+			return "", fmt.Errorf("%w: the installed profile supports outgoing TCP only", ErrInvalidStrategy)
+		}
+		nameFlag := "--name"
+		if i > 0 {
+			nameFlag = "--new"
+		}
+		fmt.Fprintf(&text, "%s=%s\n--filter-tcp=", nameFlag, profile.ID)
+		for j, port := range profile.Ports {
+			if j > 0 {
+				text.WriteByte(',')
+			}
+			fmt.Fprint(&text, port)
+		}
+		text.WriteByte('\n')
+		if profile.SplitAt != 0 {
+			fmt.Fprintf(&text, "--filter-l7=%s\n--payload=%s\n--lua-desync=multisplit:pos=%d\n",
+				payloadProtocol(profile.Payload), profile.Payload, profile.SplitAt)
+		}
+	}
+	return text.String(), nil
+}
