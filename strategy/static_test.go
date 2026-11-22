@@ -56,3 +56,22 @@ func TestSealRejectsInvalidNativeShapeAndReturnCapture(t *testing.T) {
 		t.Fatal("unqualified return capture was activated")
 	}
 }
+
+func TestCompileBindingsUseDisjointMarksAndOneLuaSetup(t *testing.T) {
+	value := fixture(t)
+	bindings := []MarkedStrategy{{value, 0x120000}, {value, 0x130000}}
+	args, err := CompileBindings("/opt/zapret2", 401, 0x40000000, bindings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	argv := strings.Join(args, " ")
+	if strings.Count(argv, "--qnum=") != 1 || strings.Count(argv, "--lua-init=") != 2 ||
+		!strings.Contains(argv, "--name=b1-p1 --filter-mark=0x120000/0xffffffff --filter-tcp=443") ||
+		!strings.Contains(argv, "--new=b2-p1 --filter-mark=0x130000/0xffffffff --filter-tcp=443") {
+		t.Fatal(args)
+	}
+	bindings[1].QueueMark = bindings[0].QueueMark
+	if _, err := CompileBindings("/opt/zapret2", 401, 0x40000000, bindings); err == nil {
+		t.Fatal("duplicate input mark shared different grants")
+	}
+}

@@ -23,7 +23,9 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	argv, err := value.Compile(root, 401, 0x120000, 0x40000000)
+	argv, err := CompileBindings(root, 401, 0x40000000, []MarkedStrategy{
+		{Strategy: value, QueueMark: 0x120000}, {Strategy: value, QueueMark: 0x130000},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
