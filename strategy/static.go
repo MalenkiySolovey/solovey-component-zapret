@@ -133,25 +133,62 @@ func (value Strategy) scope() Scope {
 // Compile returns argv, not a shell command or an execution grant. Queue and
 // marks are output of the Network Planner, never editable Strategy values.
 func (value Strategy) Compile(engineRoot string, queue uint16, mark, loopMark uint32) ([]string, error) {
-	sealed, err := value.Verified()
-	if err != nil {
-		return nil, err
-	}
-	if queue == 0 || mark == 0 || loopMark == 0 || loopMark&(loopMark-1) != 0 || mark&loopMark != 0 ||
+	return CompileBindings(engineRoot, queue, loopMark, []MarkedStrategy{{Strategy: value, QueueMark: mark}})
+}
+
+// MarkedStrategy pairs a strategy revision with its exact, planner-owned
+// NFQUEUE input mark. A strategy may be compiled for distinct marks.
+type MarkedStrategy struct {
+	Strategy  Strategy
+	QueueMark uint32
+}
+
+// CompileBindings compiles one listener into disjoint native profile groups.
+// Global Lua setup is performed once; each profile filters its group's mark.
+func CompileBindings(engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy) ([]string, error) {
+	if queue == 0 || loopMark == 0 || loopMark&(loopMark-1) != 0 || len(bindings) == 0 || len(bindings) > 3 ||
 		!path.IsAbs(engineRoot) || path.Clean(engineRoot) != engineRoot || len(engineRoot) > 512 || strings.ContainsAny(engineRoot, "\x00\r\n") {
 		return nil, errors.New("invalid Zapret engine root or Network Planner allocation")
 	}
-	if sealed.NeedsReturn {
-		return nil, errors.New("Zapret return path is not qualified")
+	verified := make([]Strategy, len(bindings))
+	seen := make(map[uint32]bool, len(bindings))
+	needsLua := false
+	for i, item := range bindings {
+		if item.QueueMark == 0 || item.QueueMark&loopMark != 0 || seen[item.QueueMark] {
+			return nil, errors.New("invalid or repeated Zapret queue mark")
+		}
+		seen[item.QueueMark] = true
+		sealed, err := item.Strategy.Verified()
+		if err != nil {
+			return nil, err
+		}
+		if sealed.NeedsReturn {
+			return nil, errors.New("Zapret return path is not qualified")
+		}
+		verified[i] = sealed
+		needsLua = needsLua || len(sealed.Assets) != 0
 	}
 	args := []string{fmt.Sprintf("--qnum=%d", queue), fmt.Sprintf("--fwmark=0x%x", loopMark)}
-	if len(sealed.Assets) != 0 {
+	if needsLua {
 		args = append(args, "--lua-init=@"+path.Join(engineRoot, "lua/zapret-lib.lua"),
 			"--lua-init=@"+path.Join(engineRoot, "lua/zapret-antidpi.lua"))
 	}
-	for i, profile := range sealed.Profiles {
-		if i > 0 {
-			args = append(args, "--new="+profile.ID)
+	for i, sealed := range verified {
+		args = appendProfiles(args, sealed.Profiles, bindings[i].QueueMark, i, len(bindings) > 1)
+	}
+	return args, nil
+}
+
+func appendProfiles(args []string, profiles []Profile, mark uint32, binding int, groupNames bool) []string {
+	for i, profile := range profiles {
+		name := profile.ID
+		if groupNames {
+			name = fmt.Sprintf("b%d-p%d", binding+1, i+1)
+		}
+		if i > 0 || binding > 0 {
+			args = append(args, "--new="+name)
+		} else if groupNames {
+			args = append(args, "--name="+name)
 		}
 		ports := make([]string, 0, len(profile.Ports))
 		for _, port := range profile.Ports {
@@ -164,7 +201,7 @@ func (value Strategy) Compile(engineRoot string, queue uint16, mark, loopMark ui
 				fmt.Sprintf("--lua-desync=multisplit:pos=%d", profile.SplitAt))
 		}
 	}
-	return args, nil
+	return args
 }
 
 func payloadProtocol(value Payload) string {
