@@ -1,11 +1,16 @@
 import api from '@solovey/component-ui/api'
 
+export type NativeListField = 'hostList' | 'hostListExclude' | 'ipSet' | 'ipSetExclude'
+
 export interface Profile {
   id: string
-  protocol: 'tcp'
+  protocol: 'tcp' | 'udp'
+  family?: 'ipv4' | 'ipv6'
   ports: number[]
-  payload?: 'tls_client_hello' | 'http_req'
+  payload?: 'tls_client_hello' | 'http_req' | 'quic_initial'
   splitAt?: number
+  quicRepeats?: number
+  lists?: Partial<Record<NativeListField, string[]>>
 }
 export interface StrategyRecord {
   name: string
@@ -19,6 +24,7 @@ export interface StrategyReference {
   state: 'off' | 'applied' | 'pending' | 'blocked'
   desiredRevision?: string
   appliedRevision?: string
+  queue?: number
 }
 export interface CatalogView {
   catalog: { records: Record<string, StrategyRecord> }

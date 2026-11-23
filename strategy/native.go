@@ -10,8 +10,8 @@ import (
 
 const MaxNativeBytes = 8 << 10
 
-// ParseNative accepts only the profile fields supported by the installed
-// IPv4/TCP compiler. Raw text is an editor input, never runnable engine argv.
+// ParseNative accepts only bounded native profile fields. Raw text is an
+// editor input, never runnable engine argv.
 // The caller can retain text unchanged for a lossless raw round trip.
 func ParseNative(id, text string) (Strategy, error) {
 	if len(text) > MaxNativeBytes {
@@ -28,17 +28,17 @@ func ParseNative(id, text string) (Strategy, error) {
 		seen map[string]bool
 	}
 	first := func(id string) draft {
-		return draft{Profile: Profile{ID: id, Protocol: intent.PacketProtocolTCP}, seen: map[string]bool{}}
+		return draft{Profile: Profile{ID: id}, seen: map[string]bool{}}
 	}
 	current := first("profile-1")
 	value := Strategy{Schema: Schema, ID: id}
 	finish := func() error {
-		if !current.seen["--filter-tcp"] || current.seen["--payload"] != current.seen["--lua-desync"] ||
-			current.seen["--filter-l7"] != (current.SplitAt != 0) ||
-			current.SplitAt != 0 && payloadProtocol(current.Payload) != current.l7 {
+		if current.Protocol == "" || current.seen["--payload"] != current.seen["--lua-desync"] ||
+			current.seen["--filter-l7"] != current.hasAction() ||
+			current.hasAction() && payloadProtocol(current.Payload) != current.l7 {
 			return fmt.Errorf("%w: incomplete or inconsistent native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
 		}
-		if current.SplitAt != 0 {
+		if current.hasAction() {
 			value.Assets = []AssetRef{Library, Actions}
 		}
 		value.Profiles = append(value.Profiles, current.Profile)
@@ -68,7 +68,16 @@ func ParseNative(id, text string) (Strategy, error) {
 		switch key {
 		case "--name":
 			current.ID = input
-		case "--filter-tcp":
+		case "--filter-l3":
+			current.Family = AddressFamily(input)
+		case "--filter-tcp", "--filter-udp":
+			if current.Protocol != "" {
+				return Strategy{}, bad
+			}
+			current.Protocol = intent.PacketProtocolTCP
+			if key == "--filter-udp" {
+				current.Protocol = intent.PacketProtocolUDP
+			}
 			for _, port := range strings.Split(input, ",") {
 				n, err := strconv.ParseUint(port, 10, 16)
 				if err != nil || n == 0 || len(current.Ports) >= 32 {
@@ -77,21 +86,38 @@ func ParseNative(id, text string) (Strategy, error) {
 				current.Ports = append(current.Ports, uint16(n))
 			}
 		case "--filter-l7":
-			if input != "tls" && input != "http" {
+			if input != "tls" && input != "http" && input != "quic" {
 				return Strategy{}, bad
 			}
 			current.l7 = input
 		case "--payload":
 			current.Payload = Payload(input)
 		case "--lua-desync":
-			pos, ok := strings.CutPrefix(input, "multisplit:pos=")
-			n, err := strconv.ParseUint(pos, 10, 16)
-			if !ok || err != nil || n == 0 {
+			if input == "circular" || strings.HasPrefix(input, "circular:") {
+				return Strategy{}, fmt.Errorf("native Circular is unavailable: %w", errReturnObservationUnavailable)
+			}
+			if pos, ok := strings.CutPrefix(input, "multisplit:pos="); ok {
+				n, err := strconv.ParseUint(pos, 10, 16)
+				if err != nil || n == 0 {
+					return Strategy{}, bad
+				}
+				current.SplitAt = uint16(n)
+			} else if repeats, ok := strings.CutPrefix(input, "fake:blob=fake_default_quic:repeats="); ok {
+				n, err := strconv.ParseUint(repeats, 10, 8)
+				if err != nil || n == 0 {
+					return Strategy{}, bad
+				}
+				current.QUICRepeats = uint8(n)
+			} else {
 				return Strategy{}, bad
 			}
-			current.SplitAt = uint16(n)
 		default:
-			return Strategy{}, bad
+			if current.Lists == nil {
+				current.Lists = new(NativeLists)
+			}
+			if !current.Lists.set(key, input) {
+				return Strategy{}, bad
+			}
 		}
 	}
 	if err := finish(); err != nil {
@@ -109,14 +135,14 @@ func FormatNative(value Strategy) (string, error) {
 	}
 	var text strings.Builder
 	for i, profile := range value.Profiles {
-		if value.NeedsReturn || profile.Protocol != intent.PacketProtocolTCP {
-			return "", fmt.Errorf("%w: the installed profile supports outgoing TCP only", ErrInvalidStrategy)
+		if value.NeedsReturn {
+			return "", errReturnObservationUnavailable
 		}
 		nameFlag := "--name"
 		if i > 0 {
 			nameFlag = "--new"
 		}
-		fmt.Fprintf(&text, "%s=%s\n--filter-tcp=", nameFlag, profile.ID)
+		fmt.Fprintf(&text, "%s=%s\n--filter-%s=", nameFlag, profile.ID, profile.Protocol)
 		for j, port := range profile.Ports {
 			if j > 0 {
 				text.WriteByte(',')
@@ -124,9 +150,14 @@ func FormatNative(value Strategy) (string, error) {
 			fmt.Fprint(&text, port)
 		}
 		text.WriteByte('\n')
-		if profile.SplitAt != 0 {
-			fmt.Fprintf(&text, "--filter-l7=%s\n--payload=%s\n--lua-desync=multisplit:pos=%d\n",
-				payloadProtocol(profile.Payload), profile.Payload, profile.SplitAt)
+		if profile.Family != "" {
+			fmt.Fprintf(&text, "--filter-l3=%s\n", profile.Family)
+		}
+		for _, arg := range profile.Lists.appendArgs(nil) {
+			fmt.Fprintln(&text, arg)
+		}
+		for _, arg := range profile.actionArgs() {
+			fmt.Fprintln(&text, arg)
 		}
 	}
 	return text.String(), nil

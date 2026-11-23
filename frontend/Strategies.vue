@@ -27,12 +27,13 @@
     <section v-if="view?.references.length" aria-labelledby="zapret-binding-status">
       <h3 id="zapret-binding-status" class="mb-2">{{ t('zapretCatalog.bindings') }}</h3>
       <v-table density="compact">
-        <thead><tr><th>{{ t('zapretCatalog.direct') }}</th><th>{{ t('zapretCatalog.strategy') }}</th><th>{{ t('zapretCatalog.status') }}</th><th>{{ t('zapretCatalog.diagnostic') }}</th></tr></thead>
+        <thead><tr><th>{{ t('zapretCatalog.direct') }}</th><th>{{ t('zapretCatalog.strategy') }}</th><th>{{ t('zapretCatalog.status') }}</th><th>NFQUEUE</th><th>{{ t('zapretCatalog.diagnostic') }}</th></tr></thead>
         <tbody>
           <tr v-for="ref in view.references" :key="ref.outboundRef">
             <td>{{ ref.outboundRef }}</td>
             <td>{{ view.catalog.records[ref.strategyRef]?.name ?? ref.strategyRef }} <code v-if="ref.desiredRevision" :title="ref.desiredRevision">{{ ref.desiredRevision.slice(0, 8) }}</code></td>
             <td>{{ t(`zapretCatalog.states.${ref.state}`) }} <code v-if="ref.appliedRevision" :title="ref.appliedRevision">{{ ref.appliedRevision.slice(0, 8) }}</code></td>
+            <td><code v-if="ref.queue">{{ ref.queue }}</code><span v-else>-</span></td>
             <td><v-btn icon="mdi-pulse" variant="text" :title="t('zapretCatalog.diagnostic')" :aria-label="t('zapretCatalog.diagnostic')" :disabled="busy || ref.state !== 'applied'" @click="runDiagnostic(ref)" /></td>
           </tr>
         </tbody>
@@ -48,6 +49,7 @@
           <div v-if="!activeID" class="d-flex flex-wrap ga-2 mb-3">
             <v-btn size="small" variant="tonal" @click="preset('tls_client_hello', '443,853')">{{ t('zapretCatalog.tlsPreset') }}</v-btn>
             <v-btn size="small" variant="tonal" @click="preset('http_req', '80')">{{ t('zapretCatalog.httpPreset') }}</v-btn>
+            <v-btn size="small" variant="tonal" @click="preset('quic_initial', '443,853')">{{ t('zapretCatalog.quicPreset') }}</v-btn>
           </div>
           <v-btn-toggle :model-value="mode" mandatory density="compact" class="mb-3" @update:model-value="switchMode">
             <v-btn value="visual" :disabled="busy">{{ t('zapretCatalog.visual') }}</v-btn>
@@ -66,10 +68,20 @@
               </div>
               <div class="profile-fields">
                 <v-text-field v-model="row.id" :label="t('zapretCatalog.profileID')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                <v-select :model-value="row.protocol" :items="['tcp', 'udp']" :label="t('zapretCatalog.protocol')" hide-details density="compact" @update:model-value="changeProtocol(row, $event)" />
+                <v-select v-model="row.family" :items="families" :label="t('zapretCatalog.family')" hide-details density="compact" @update:model-value="visualChanged = true" />
                 <v-text-field v-model="row.ports" :label="t('zapretCatalog.ports')" hide-details density="compact" @update:model-value="visualChanged = true" />
-                <v-select v-model="row.payload" :items="payloads" :label="t('zapretCatalog.payload')" hide-details density="compact" @update:model-value="visualChanged = true" />
-                <v-text-field v-if="row.payload" v-model="row.splitAt" type="number" min="1" max="128" :label="t('zapretCatalog.split')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                <v-select v-model="row.payload" :items="payloads(row.protocol)" :label="t('zapretCatalog.payload')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                <v-text-field v-if="row.payload === 'quic_initial'" v-model="row.quicRepeats" type="number" min="1" max="4" :label="t('zapretCatalog.quicRepeats')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                <v-text-field v-else-if="row.payload" v-model="row.splitAt" type="number" min="1" max="128" :label="t('zapretCatalog.split')" hide-details density="compact" @update:model-value="visualChanged = true" />
               </div>
+              <details class="mt-2" :open="listFields.some(field => row.lists[field] !== '') || undefined">
+                <summary>{{ t('zapretCatalog.nativeLists') }}</summary>
+                <div class="profile-fields mt-2">
+                  <v-textarea v-for="field in listFields" :key="field" v-model="row.lists[field]" :label="t(`zapretCatalog.${field}`)"
+                    rows="2" maxlength="2048" density="compact" hide-details spellcheck="false" @update:model-value="visualChanged = true" />
+                </div>
+              </details>
             </div>
             <v-btn variant="text" prepend-icon="mdi-plus" :disabled="rows.length >= 16" @click="addProfile">{{ t('zapretCatalog.addProfile') }}</v-btn>
           </template>
@@ -94,10 +106,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { diagnose, draftToSave, exportRecord, loadCatalog, preview, saveCatalog, type CatalogView, type Profile, type StrategyRecord, type StrategyReference } from './catalog'
+import { diagnose, draftToSave, exportRecord, loadCatalog, preview, saveCatalog, type CatalogView, type NativeListField, type Profile, type StrategyRecord, type StrategyReference } from './catalog'
 
 const { t } = useI18n()
-type Row = { key: number; id: string; ports: string; payload: Profile['payload'] | ''; splitAt: string }
+type Row = { key: number; id: string; protocol: Profile['protocol']; family: NonNullable<Profile['family']> | ''; ports: string;
+  payload: NonNullable<Profile['payload']> | ''; splitAt: string; quicRepeats: string; lists: Record<NativeListField, string> }
+const listFields = ['hostList', 'hostListExclude', 'ipSet', 'ipSetExclude'] as const
 const view = ref<CatalogView>()
 const busy = ref(false)
 const error = ref('')
@@ -115,7 +129,10 @@ const rows = ref<Row[]>([])
 const visualChanged = ref(false)
 let rowKey = 0
 const records = computed(() => Object.values(view.value?.catalog.records ?? {}).sort((a, b) => a.name.localeCompare(b.name)))
-const payloads = computed(() => [{ title: t('zapretCatalog.passive'), value: '' }, { title: 'TLS ClientHello', value: 'tls_client_hello' }, { title: 'HTTP request', value: 'http_req' }])
+const families = computed(() => [{ title: t('zapretCatalog.availableFamilies'), value: '' }, { title: 'IPv4', value: 'ipv4' }, { title: 'IPv6', value: 'ipv6' }])
+const payloads = (protocol: Profile['protocol']) => [{ title: t('zapretCatalog.passive'), value: '' }, ...(protocol === 'udp'
+  ? [{ title: 'QUIC Initial', value: 'quic_initial' }]
+  : [{ title: 'TLS ClientHello', value: 'tls_client_hello' }, { title: 'HTTP request', value: 'http_req' }])]
 const refsFor = (id: string) => view.value?.references.filter(ref => ref.strategyRef === id) ?? []
 const affected = computed(() => refsFor(activeID.value).filter(ref => ref.enabled))
 const errorText = (err: unknown) => {
@@ -131,13 +148,24 @@ async function run(action: () => Promise<void>, inDialog = false) {
 }
 const refresh = () => run(async () => { view.value = await loadCatalog() })
 onMounted(refresh)
+function listText(lists: Profile['lists'] = {}): Row['lists'] {
+  return { hostList: lists.hostList?.join('\n') ?? '', hostListExclude: lists.hostListExclude?.join('\n') ?? '',
+    ipSet: lists.ipSet?.join('\n') ?? '', ipSetExclude: lists.ipSetExclude?.join('\n') ?? '' }
+}
 function withRows(profiles: Profile[]) {
-  rows.value = profiles.map(p => ({ key: ++rowKey, id: p.id, ports: p.ports.join(','), payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9) }))
+  rows.value = profiles.map(p => ({ key: ++rowKey, id: p.id, protocol: p.protocol, family: p.family ?? '', ports: p.ports.join(','),
+    payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9), quicRepeats: String(p.quicRepeats ?? 1), lists: listText(p.lists) }))
+}
+function changeProtocol(row: Row, protocol: Profile['protocol']) {
+  if (row.protocol === protocol) return
+  row.protocol = protocol
+  row.payload = ''
+  visualChanged.value = true
 }
 function addProfile() {
   let index = 1
   while (rows.value.some(row => row.id === `profile-${index}`)) index++
-  rows.value.push({ key: ++rowKey, id: `profile-${index}`, ports: '443', payload: '', splitAt: '9' })
+  rows.value.push({ key: ++rowKey, id: `profile-${index}`, protocol: 'tcp', family: '', ports: '443', payload: '', splitAt: '9', quicRepeats: '1', lists: listText() })
   visualChanged.value = true
 }
 function remove(index: number) { rows.value.splice(index, 1); visualChanged.value = true }
@@ -146,8 +174,9 @@ function move(index: number, offset: number) {
   rows.value.splice(index + offset, 0, row)
   visualChanged.value = true
 }
-function preset(payload: 'tls_client_hello' | 'http_req', ports: string) {
-  rows.value = [{ key: ++rowKey, id: 'profile-1', ports, payload, splitAt: '9' }]
+function preset(payload: NonNullable<Profile['payload']>, ports: string) {
+  rows.value = [{ key: ++rowKey, id: 'profile-1', protocol: payload === 'quic_initial' ? 'udp' : 'tcp', family: '', ports, payload,
+    splitAt: '9', quicRepeats: '1', lists: listText() }]
   mode.value = 'visual'
   visualChanged.value = true
 }
@@ -164,8 +193,16 @@ function openDraft(record?: StrategyRecord, clone = false) {
   editing.value = true
 }
 function draft() {
-  const profiles = rows.value.map<Profile>(row => ({ id: row.id.trim(), protocol: 'tcp', ports: row.ports.split(',').map(port => Number(port.trim())),
-    ...(row.payload ? { payload: row.payload, splitAt: Number(row.splitAt) } : {}) }))
+  const profiles = rows.value.map<Profile>(row => {
+    const lists: NonNullable<Profile['lists']> = {}
+    for (const field of listFields) {
+      const entries = row.lists[field].split(/[\s,]+/).filter(Boolean)
+      if (entries.length) lists[field] = entries
+    }
+    return { id: row.id.trim(), protocol: row.protocol, ports: row.ports.split(',').map(port => Number(port.trim())),
+      ...(row.family ? { family: row.family } : {}), ...(row.payload === 'quic_initial' ? { payload: row.payload, quicRepeats: Number(row.quicRepeats) }
+        : row.payload ? { payload: row.payload, splitAt: Number(row.splitAt) } : {}), ...(Object.keys(lists).length ? { lists } : {}) }
+  })
   return draftToSave(name.value.trim(), raw.value, profiles, visualChanged.value)
 }
 async function switchMode(next: 'visual' | 'raw') {

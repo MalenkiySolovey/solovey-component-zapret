@@ -26,19 +26,30 @@ const (
 
 type Payload string
 
+type AddressFamily string
+
+const (
+	IPv4 AddressFamily = "ipv4"
+	IPv6 AddressFamily = "ipv6"
+)
+
 const (
 	TLSClientHello Payload = "tls_client_hello"
 	HTTPRequest    Payload = "http_req"
+	QUICInitial    Payload = "quic_initial"
 )
 
-// An empty SplitAt gives a passive native profile. A nonzero SplitAt selects
-// the restricted upstream TCP segmentation operation for one known payload.
+// A profile can observe packets without changing them, split a known TCP
+// payload, or emit the pinned upstream QUIC Initial blob alongside the original.
 type Profile struct {
-	ID       string                `json:"id"`
-	Protocol intent.PacketProtocol `json:"protocol"`
-	Ports    []uint16              `json:"ports"`
-	Payload  Payload               `json:"payload,omitempty"`
-	SplitAt  uint16                `json:"splitAt,omitempty"`
+	ID          string                `json:"id"`
+	Protocol    intent.PacketProtocol `json:"protocol"`
+	Ports       []uint16              `json:"ports"`
+	Payload     Payload               `json:"payload,omitempty"`
+	SplitAt     uint16                `json:"splitAt,omitempty"`
+	QUICRepeats uint8                 `json:"quicRepeats,omitempty"`
+	Family      AddressFamily         `json:"family,omitempty"` // Empty matches either admitted family.
+	Lists       *NativeLists          `json:"lists,omitempty"`
 }
 
 type Strategy struct {
@@ -57,6 +68,8 @@ type Scope struct {
 
 var ErrInvalidStrategy = errors.New("invalid static Zapret strategy")
 
+var errReturnObservationUnavailable = errors.New("Zapret return-path observation is not supported by the installed profile")
+
 // Seal validates and returns a new content-revisioned Strategy. It copies
 // caller-owned slices and normalizes sets without reordering profiles or Lua.
 func Seal(value Strategy) (Strategy, error) {
@@ -67,6 +80,7 @@ func Seal(value Strategy) (Strategy, error) {
 	value.Assets = slices.Clone(value.Assets)
 	value.Profiles = slices.Clone(value.Profiles)
 	seen := map[string]bool{}
+	listBytes := maxNativeListBytes
 	for i, profile := range value.Profiles {
 		if !outbounds.ValidZapretStrategyRef(profile.ID) || seen[profile.ID] || len(profile.Ports) == 0 || len(profile.Ports) > 32 ||
 			(profile.Protocol != intent.PacketProtocolTCP && profile.Protocol != intent.PacketProtocolUDP) {
@@ -78,14 +92,20 @@ func Seal(value Strategy) (Strategy, error) {
 		if profile.Ports[0] == 0 || len(slices.Compact(slices.Clone(profile.Ports))) != len(profile.Ports) {
 			return Strategy{}, ErrInvalidStrategy
 		}
-		if profile.SplitAt == 0 && profile.Payload != "" || profile.SplitAt != 0 &&
-			(profile.Protocol != intent.PacketProtocolTCP || profile.SplitAt > 128 ||
-				(profile.Payload != TLSClientHello && profile.Payload != HTTPRequest) || len(value.Assets) != 2) {
+		if profile.Family != "" && profile.Family != IPv4 && profile.Family != IPv6 ||
+			!profile.validAction() || profile.hasAction() && len(value.Assets) != 2 {
 			return Strategy{}, ErrInvalidStrategy
+		}
+		if profile.Lists != nil {
+			lists, err := profile.Lists.seal(&listBytes)
+			if err != nil {
+				return Strategy{}, fmt.Errorf("%w: invalid native lists in profile %q", err, profile.ID)
+			}
+			profile.Lists = lists
 		}
 		value.Profiles[i] = profile
 	}
-	scope := value.scope()
+	scope := value.scope("")
 	if len(scope.TCP) > 64 || len(scope.UDP) > 64 {
 		return Strategy{}, ErrInvalidStrategy
 	}
@@ -98,6 +118,20 @@ func Seal(value Strategy) (Strategy, error) {
 	return value, nil
 }
 
+func (p Profile) hasAction() bool { return p.SplitAt != 0 || p.QUICRepeats != 0 }
+
+func (p Profile) validAction() bool {
+	switch {
+	case p.SplitAt != 0:
+		return p.Protocol == intent.PacketProtocolTCP && p.SplitAt <= 128 && p.QUICRepeats == 0 &&
+			(p.Payload == TLSClientHello || p.Payload == HTTPRequest)
+	case p.QUICRepeats != 0:
+		return p.Protocol == intent.PacketProtocolUDP && p.QUICRepeats <= 4 && p.Payload == QUICInitial
+	default:
+		return p.Payload == ""
+	}
+}
+
 func (value Strategy) Verified() (Strategy, error) {
 	sealed, err := Seal(value)
 	if err != nil || sealed.Revision != value.Revision {
@@ -107,16 +141,28 @@ func (value Strategy) Verified() (Strategy, error) {
 }
 
 func (value Strategy) PacketScope() (Scope, error) {
+	return value.PacketScopeForFamily("")
+}
+
+// PacketScopeForFamily translates ordered profiles into the exact port sets
+// needed by the Planner. It does not add ports from the other family.
+func (value Strategy) PacketScopeForFamily(family AddressFamily) (Scope, error) {
+	if family != "" && family != IPv4 && family != IPv6 {
+		return Scope{}, ErrInvalidStrategy
+	}
 	sealed, err := value.Verified()
 	if err != nil {
 		return Scope{}, err
 	}
-	return sealed.scope(), nil
+	return sealed.scope(family), nil
 }
 
-func (value Strategy) scope() Scope {
+func (value Strategy) scope(family AddressFamily) Scope {
 	result := Scope{NeedsReturn: value.NeedsReturn}
 	for _, profile := range value.Profiles {
+		if family != "" && profile.Family != "" && profile.Family != family {
+			continue
+		}
 		if profile.Protocol == intent.PacketProtocolTCP {
 			result.TCP = append(result.TCP, profile.Ports...)
 		} else {
@@ -128,6 +174,22 @@ func (value Strategy) scope() Scope {
 	result.TCP = slices.Compact(result.TCP)
 	result.UDP = slices.Compact(result.UDP)
 	return result
+}
+
+// HandlesQUIC requires coverage independent of destination list matches. A
+// conditional action may fall through, and a passive profile may shadow it.
+func (value Strategy) HandlesQUIC(family AddressFamily, port uint16) bool {
+	for _, p := range value.Profiles {
+		if p.Protocol == intent.PacketProtocolUDP && (p.Family == "" || p.Family == family) && slices.Contains(p.Ports, port) {
+			if p.QUICRepeats == 0 {
+				return false
+			}
+			if p.Lists == nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Compile returns argv, not a shell command or an execution grant. Queue and
@@ -163,7 +225,7 @@ func CompileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 			return nil, err
 		}
 		if sealed.NeedsReturn {
-			return nil, errors.New("Zapret return path is not qualified")
+			return nil, errReturnObservationUnavailable
 		}
 		verified[i] = sealed
 		needsLua = needsLua || len(sealed.Assets) != 0
@@ -196,17 +258,37 @@ func appendProfiles(args []string, profiles []Profile, mark uint32, binding int,
 		}
 		args = append(args, fmt.Sprintf("--filter-mark=0x%x/0xffffffff", mark),
 			"--filter-"+string(profile.Protocol)+"="+strings.Join(ports, ","))
-		if profile.SplitAt != 0 {
-			args = append(args, "--filter-l7="+payloadProtocol(profile.Payload), "--payload="+string(profile.Payload),
-				fmt.Sprintf("--lua-desync=multisplit:pos=%d", profile.SplitAt))
+		if profile.Family != "" {
+			args = append(args, "--filter-l3="+string(profile.Family))
 		}
+		args = profile.Lists.appendArgs(args)
+		args = append(args, profile.actionArgs()...)
 	}
 	return args
 }
 
 func payloadProtocol(value Payload) string {
-	if value == TLSClientHello {
+	switch value {
+	case TLSClientHello:
 		return "tls"
+	case HTTPRequest:
+		return "http"
+	case QUICInitial:
+		return "quic"
+	default:
+		return ""
 	}
-	return "http"
+}
+
+func (p Profile) actionArgs() []string {
+	var lua string
+	switch {
+	case p.SplitAt != 0:
+		lua = fmt.Sprintf("multisplit:pos=%d", p.SplitAt)
+	case p.QUICRepeats != 0:
+		lua = fmt.Sprintf("fake:blob=fake_default_quic:repeats=%d", p.QUICRepeats)
+	default:
+		return nil
+	}
+	return []string{"--filter-l7=" + payloadProtocol(p.Payload), "--payload=" + string(p.Payload), "--lua-desync=" + lua}
 }

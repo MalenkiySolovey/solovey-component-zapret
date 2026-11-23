@@ -8,8 +8,6 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
-
-	"github.com/MalenkiySolovey/solovey-host/network/intent"
 )
 
 const (
@@ -40,9 +38,8 @@ type Draft struct {
 	Profiles []Profile `json:"profiles,omitempty"`
 }
 
-// Transfer describes the only assets this profile can use. It carries no
-// executable content or filesystem paths. On import these fields must match
-// the immutable engine input; neither asset is installed by the editor.
+// Transfer binds the strategy to the immutable engine and built-in assets.
+// Inline lists travel as strategy data; imports install no files or scripts.
 type Transfer struct {
 	Schema       string     `json:"schema"`
 	EngineCommit string     `json:"engineCommit"`
@@ -64,10 +61,7 @@ func SealDraft(d Draft) (Record, error) {
 	} else {
 		compiled := Strategy{Schema: Schema, ID: d.ID, Profiles: d.Profiles}
 		for _, p := range d.Profiles {
-			if p.Protocol != intent.PacketProtocolTCP {
-				return Record{}, errors.New("the installed editor supports TCP profiles only")
-			}
-			if p.SplitAt != 0 {
+			if p.hasAction() {
 				compiled.Assets = []AssetRef{Library, Actions}
 			}
 		}
