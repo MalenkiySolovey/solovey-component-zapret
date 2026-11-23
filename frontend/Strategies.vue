@@ -17,13 +17,29 @@
         <template #append>
           <v-btn icon="mdi-pencil-outline" variant="text" :title="t('zapretCatalog.edit')" :aria-label="t('zapretCatalog.edit')" :disabled="busy" @click="openDraft(record)" />
           <v-btn icon="mdi-content-copy" variant="text" :title="t('zapretCatalog.clone')" :aria-label="t('zapretCatalog.clone')" :disabled="busy" @click="openDraft(record, true)" />
-          <v-btn icon="mdi-download" variant="text" :title="t('zapretCatalog.export')" :aria-label="t('zapretCatalog.export')" @click="download(record)" />
+          <v-btn icon="mdi-download" variant="text" :title="t('zapretCatalog.export')" :aria-label="t('zapretCatalog.export')" :disabled="busy" @click="download(record)" />
           <v-btn icon="mdi-delete-outline" variant="text" :title="t('zapretCatalog.delete')" :aria-label="t('zapretCatalog.delete')" :disabled="busy || refsFor(record.definition.id).length > 0" @click="deleteRecord = record" />
         </template>
         <div v-if="refsFor(record.definition.id).length" class="text-caption mt-1">{{ t('zapretCatalog.references') }}: {{ refsFor(record.definition.id).map(ref => ref.outboundRef).join(', ') }}</div>
       </v-list-item>
       <v-list-item v-if="records.length === 0" :title="t('zapretCatalog.empty')" />
     </v-list>
+    <section v-if="view" class="mb-4" aria-labelledby="zapret-native-list-title">
+      <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-2">
+        <h3 id="zapret-native-list-title">{{ t('zapretCatalog.sharedLists') }}</h3>
+        <v-btn prepend-icon="mdi-plus" variant="tonal" :disabled="busy || namedLists.length >= 16" @click="openList()">{{ t('zapretCatalog.newList') }}</v-btn>
+      </div>
+      <v-list density="compact" class="border rounded-lg">
+        <v-list-item v-for="[id, list] in namedLists" :key="id" :title="id" :subtitle="`${t(`zapretCatalog.${list.kind}Kind`)} · ${list.entries.length}`">
+          <template #append>
+            <v-btn icon="mdi-pencil-outline" variant="text" :aria-label="t('zapretCatalog.editList')" :title="t('zapretCatalog.editList')" :disabled="busy" @click="openList(id, list)" />
+            <v-btn icon="mdi-delete-outline" variant="text" :aria-label="t('zapretCatalog.deleteList')" :title="t('zapretCatalog.deleteList')" :disabled="busy || listConsumers(id).length > 0" @click="deletingList = id" />
+          </template>
+          <div v-if="listConsumers(id).length" class="text-caption mt-1">{{ t('zapretCatalog.references') }}: {{ listConsumers(id).map(record => record.name).join(', ') }}</div>
+        </v-list-item>
+        <v-list-item v-if="!namedLists.length" :title="t('zapretCatalog.noLists')" />
+      </v-list>
+    </section>
     <section v-if="view?.references.length" aria-labelledby="zapret-binding-status">
       <h3 id="zapret-binding-status" class="mb-2">{{ t('zapretCatalog.bindings') }}</h3>
       <v-table density="compact">
@@ -55,7 +71,15 @@
             <v-btn value="visual" :disabled="busy">{{ t('zapretCatalog.visual') }}</v-btn>
             <v-btn value="raw" :disabled="busy">{{ t('zapretCatalog.raw') }}</v-btn>
           </v-btn-toggle>
-          <v-textarea v-if="mode === 'raw'" v-model="raw" class="native-source" :label="t('zapretCatalog.raw')" spellcheck="false" maxlength="8192" rows="8" />
+          <template v-if="mode === 'raw'">
+            <v-textarea v-model="raw" class="native-source" :label="t('zapretCatalog.raw')" spellcheck="false" maxlength="8192" rows="8" />
+            <dl v-if="Object.keys(rawRefs).length" class="text-caption">
+              <template v-for="(refs, id) in rawRefs" :key="id">
+                <dt class="font-weight-medium">{{ id }}</dt>
+                <dd v-for="(list, field) in refs" :key="field">{{ t(`zapretCatalog.${field}`) }}: {{ list }}</dd>
+              </template>
+            </dl>
+          </template>
           <template v-else>
             <div v-for="(row, index) in rows" :key="row.key" class="profile-row py-3 border-b">
               <div class="d-flex justify-space-between align-center flex-wrap ga-2">
@@ -75,11 +99,16 @@
                 <v-text-field v-if="row.payload === 'quic_initial'" v-model="row.quicRepeats" type="number" min="1" max="4" :label="t('zapretCatalog.quicRepeats')" hide-details density="compact" @update:model-value="visualChanged = true" />
                 <v-text-field v-else-if="row.payload" v-model="row.splitAt" type="number" min="1" max="128" :label="t('zapretCatalog.split')" hide-details density="compact" @update:model-value="visualChanged = true" />
               </div>
-              <details class="mt-2" :open="listFields.some(field => row.lists[field] !== '') || undefined">
+              <details class="mt-2" :open="listFields.some(field => row.lists[field] !== '' || row.refs[field]) || undefined">
                 <summary>{{ t('zapretCatalog.nativeLists') }}</summary>
-                <div class="profile-fields mt-2">
-                  <v-textarea v-for="field in listFields" :key="field" v-model="row.lists[field]" :label="t(`zapretCatalog.${field}`)"
-                    rows="2" maxlength="2048" density="compact" hide-details spellcheck="false" @update:model-value="visualChanged = true" />
+                <div class="list-fields mt-2">
+                  <div v-for="field in listFields" :key="field">
+                    <v-select v-if="listChoices(field).length" :model-value="row.refs[field] ?? null" :items="listChoices(field)" clearable
+                      :label="t('zapretCatalog.useList', { field: t(`zapretCatalog.${field}`) })" :disabled="!!row.lists[field].trim()"
+                      density="compact" hide-details @update:model-value="setListRef(row, field, $event)" />
+                    <v-textarea v-if="!row.refs[field]" v-model="row.lists[field]" :label="t(`zapretCatalog.${field}`)" rows="2"
+                      maxlength="2048" density="compact" hide-details spellcheck="false" @update:model-value="visualChanged = true" />
+                  </div>
                 </div>
               </details>
             </div>
@@ -100,17 +129,39 @@
           <v-btn color="error" :loading="busy" @click="removeRecord">{{ t('zapretCatalog.delete') }}</v-btn></v-card-actions>
       </v-card>
     </v-dialog>
+    <v-dialog v-model="listEditing" max-width="520" persistent>
+      <v-card :title="t(listActiveID ? 'zapretCatalog.editList' : 'zapretCatalog.newList')">
+        <v-card-text>
+          <v-alert v-if="dialogError" type="error" variant="tonal" class="mb-3">{{ dialogError }}</v-alert>
+          <v-alert v-if="listAffected.length" type="warning" variant="tonal" class="mb-3">{{ t('zapretCatalog.editAffects', { refs: listAffected.join(', ') }) }}</v-alert>
+          <v-text-field v-model="listID" :label="t('zapretCatalog.listID')" :readonly="!!listActiveID" maxlength="64" />
+          <v-select v-model="listKind" :items="listKinds" :label="t('zapretCatalog.listKind')" :readonly="!!listActiveID" />
+          <v-textarea v-model="listEntries" :label="t('zapretCatalog.listEntries')" rows="5" maxlength="2048" spellcheck="false" />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn :disabled="busy" @click="listEditing = false">{{ t('zapretCatalog.cancel') }}</v-btn>
+          <v-btn :loading="busy" :disabled="!listID.trim() || !listEntries.trim()" color="primary" variant="tonal" prepend-icon="mdi-content-save-outline" @click="saveList">{{ t('zapretCatalog.save') }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    <v-dialog :model-value="deletingList !== ''" max-width="440" @update:model-value="deletingList = ''">
+      <v-card :title="t('zapretCatalog.deleteList')" :text="t('zapretCatalog.deleteConfirm', { name: deletingList })">
+        <v-card-actions><v-spacer /><v-btn :disabled="busy" @click="deletingList = ''">{{ t('zapretCatalog.cancel') }}</v-btn>
+          <v-btn color="error" :loading="busy" @click="removeList">{{ t('zapretCatalog.deleteList') }}</v-btn></v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { diagnose, draftToSave, exportRecord, loadCatalog, preview, saveCatalog, type CatalogView, type NativeListField, type Profile, type StrategyRecord, type StrategyReference } from './catalog'
+import { diagnose, draftToSave, exportRecord, loadCatalog, preview, saveCatalog, type CatalogView, type ListKind, type ListRefs, type NamedList, type NativeListField, type Profile, type ProfileListRefs, type StrategyRecord, type StrategyReference } from './catalog'
 
 const { t } = useI18n()
 type Row = { key: number; id: string; protocol: Profile['protocol']; family: NonNullable<Profile['family']> | ''; ports: string;
-  payload: NonNullable<Profile['payload']> | ''; splitAt: string; quicRepeats: string; lists: Record<NativeListField, string> }
+  payload: NonNullable<Profile['payload']> | ''; splitAt: string; quicRepeats: string; lists: Record<NativeListField, string>; refs: ProfileListRefs }
 const listFields = ['hostList', 'hostListExclude', 'ipSet', 'ipSetExclude'] as const
 const view = ref<CatalogView>()
 const busy = ref(false)
@@ -122,19 +173,34 @@ const deleteRecord = ref<StrategyRecord>()
 const editing = ref(false)
 const activeID = ref('')
 const editorRevision = ref('')
+const listEditing = ref(false)
+const listActiveID = ref('')
+const listID = ref('')
+const listKind = ref<ListKind>('hostList')
+const listEntries = ref('')
+const listEditorRevision = ref('')
+const deletingList = ref('')
 const name = ref('')
 const raw = ref('')
+const rawRefs = ref<ListRefs>({})
 const mode = ref<'visual' | 'raw'>('visual')
 const rows = ref<Row[]>([])
 const visualChanged = ref(false)
 let rowKey = 0
 const records = computed(() => Object.values(view.value?.catalog.records ?? {}).sort((a, b) => a.name.localeCompare(b.name)))
+const namedLists = computed(() => Object.entries(view.value?.catalog.lists ?? {}).sort(([a], [b]) => a.localeCompare(b)))
+const listKinds = computed<{ title: string; value: ListKind }[]>(() => [
+  { title: t('zapretCatalog.hostListKind'), value: 'hostList' }, { title: t('zapretCatalog.ipSetKind'), value: 'ipSet' },
+])
+const listChoices = (field: NativeListField) => namedLists.value.filter(([, list]) => list.kind === (field.startsWith('hostList') ? 'hostList' : 'ipSet')).map(([id]) => id)
+const listConsumers = (id: string) => records.value.filter(record => Object.values(record.listRefs ?? {}).some(refs => Object.values(refs).includes(id)))
 const families = computed(() => [{ title: t('zapretCatalog.availableFamilies'), value: '' }, { title: 'IPv4', value: 'ipv4' }, { title: 'IPv6', value: 'ipv6' }])
 const payloads = (protocol: Profile['protocol']) => [{ title: t('zapretCatalog.passive'), value: '' }, ...(protocol === 'udp'
   ? [{ title: 'QUIC Initial', value: 'quic_initial' }]
   : [{ title: 'TLS ClientHello', value: 'tls_client_hello' }, { title: 'HTTP request', value: 'http_req' }])]
 const refsFor = (id: string) => view.value?.references.filter(ref => ref.strategyRef === id) ?? []
 const affected = computed(() => refsFor(activeID.value).filter(ref => ref.enabled))
+const listAffected = computed(() => listActiveID.value ? listConsumers(listActiveID.value).flatMap(record => refsFor(record.definition.id).filter(ref => ref.enabled).map(ref => ref.outboundRef)) : [])
 const errorText = (err: unknown) => {
   const detail = (err as { response?: { data?: { msg?: unknown } } })?.response?.data?.msg
   return typeof detail === 'string' ? detail : err instanceof Error ? err.message : t('zapretCatalog.unavailable')
@@ -152,9 +218,20 @@ function listText(lists: Profile['lists'] = {}): Row['lists'] {
   return { hostList: lists.hostList?.join('\n') ?? '', hostListExclude: lists.hostListExclude?.join('\n') ?? '',
     ipSet: lists.ipSet?.join('\n') ?? '', ipSetExclude: lists.ipSetExclude?.join('\n') ?? '' }
 }
-function withRows(profiles: Profile[]) {
-  rows.value = profiles.map(p => ({ key: ++rowKey, id: p.id, protocol: p.protocol, family: p.family ?? '', ports: p.ports.join(','),
-    payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9), quicRepeats: String(p.quicRepeats ?? 1), lists: listText(p.lists) }))
+function withRows(record?: StrategyRecord) {
+  rawRefs.value = { ...record?.listRefs }
+  rows.value = (record?.definition.profiles ?? []).map(p => {
+    const refs = { ...rawRefs.value[p.id] }
+    const lists = listText(p.lists)
+    for (const field of listFields) if (refs[field]) lists[field] = ''
+    return { key: ++rowKey, id: p.id, protocol: p.protocol, family: p.family ?? '', ports: p.ports.join(','),
+      payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9), quicRepeats: String(p.quicRepeats ?? 1), lists, refs }
+  })
+}
+function setListRef(row: Row, field: NativeListField, value: string | null) {
+  if (value) row.refs[field] = value
+  else delete row.refs[field]
+  visualChanged.value = true
 }
 function changeProtocol(row: Row, protocol: Profile['protocol']) {
   if (row.protocol === protocol) return
@@ -165,7 +242,7 @@ function changeProtocol(row: Row, protocol: Profile['protocol']) {
 function addProfile() {
   let index = 1
   while (rows.value.some(row => row.id === `profile-${index}`)) index++
-  rows.value.push({ key: ++rowKey, id: `profile-${index}`, protocol: 'tcp', family: '', ports: '443', payload: '', splitAt: '9', quicRepeats: '1', lists: listText() })
+  rows.value.push({ key: ++rowKey, id: `profile-${index}`, protocol: 'tcp', family: '', ports: '443', payload: '', splitAt: '9', quicRepeats: '1', lists: listText(), refs: {} })
   visualChanged.value = true
 }
 function remove(index: number) { rows.value.splice(index, 1); visualChanged.value = true }
@@ -176,7 +253,7 @@ function move(index: number, offset: number) {
 }
 function preset(payload: NonNullable<Profile['payload']>, ports: string) {
   rows.value = [{ key: ++rowKey, id: 'profile-1', protocol: payload === 'quic_initial' ? 'udp' : 'tcp', family: '', ports, payload,
-    splitAt: '9', quicRepeats: '1', lists: listText() }]
+    splitAt: '9', quicRepeats: '1', lists: listText(), refs: {} }]
   mode.value = 'visual'
   visualChanged.value = true
 }
@@ -187,7 +264,7 @@ function openDraft(record?: StrategyRecord, clone = false) {
   raw.value = record?.raw ?? ''
   mode.value = 'visual'
   dialogError.value = ''
-  withRows(record?.definition.profiles ?? [])
+  withRows(record)
   visualChanged.value = false
   if (!record) addProfile()
   editing.value = true
@@ -203,15 +280,16 @@ function draft() {
       ...(row.family ? { family: row.family } : {}), ...(row.payload === 'quic_initial' ? { payload: row.payload, quicRepeats: Number(row.quicRepeats) }
         : row.payload ? { payload: row.payload, splitAt: Number(row.splitAt) } : {}), ...(Object.keys(lists).length ? { lists } : {}) }
   })
-  return draftToSave(name.value.trim(), raw.value, profiles, visualChanged.value)
+  const refs = visualChanged.value ? Object.fromEntries(rows.value.filter(row => Object.keys(row.refs).length).map(row => [row.id.trim(), row.refs])) : rawRefs.value
+  return draftToSave(name.value.trim(), raw.value, profiles, visualChanged.value, refs)
 }
 async function switchMode(next: 'visual' | 'raw') {
   if (next === mode.value) return
   await run(async () => {
     if (next === 'visual' || visualChanged.value) {
-      const record = await preview({ ...draft(), name: name.value.trim() || 'Preview' })
+      const record = await preview({ ...draft(), name: name.value.trim() || 'Preview' }, editorRevision.value)
       raw.value = record.raw
-      withRows(record.definition.profiles)
+      withRows(record)
     }
     visualChanged.value = false
     mode.value = next
@@ -227,21 +305,40 @@ const removeRecord = () => run(async () => {
   view.value = await saveCatalog({ action: 'delete', id: deleteRecord.value.definition.id, expectedRevision: view.value.revision })
   deleteRecord.value = undefined
 })
+function openList(id = '', list?: NamedList) {
+  listActiveID.value = listID.value = id
+  listEditorRevision.value = view.value?.revision ?? ''
+  listKind.value = list?.kind ?? 'hostList'
+  listEntries.value = list?.entries.join('\n') ?? ''
+  dialogError.value = ''
+  listEditing.value = true
+}
+const saveList = () => run(async () => {
+  view.value = await saveCatalog({ action: listActiveID.value ? 'edit-list' : 'create-list', id: listID.value.trim(),
+    expectedRevision: listEditorRevision.value, list: { kind: listKind.value, entries: listEntries.value.split(/[\s,]+/).filter(Boolean) } })
+  listEditing.value = false
+}, true)
+const removeList = () => run(async () => {
+  if (!deletingList.value || !view.value) return
+  view.value = await saveCatalog({ action: 'delete-list', id: deletingList.value, expectedRevision: view.value.revision })
+  deletingList.value = ''
+})
 const runDiagnostic = (ref: StrategyReference) => run(async () => {
   if (!view.value) return
   diagnostic.value = undefined
   const result = await diagnose(ref, view.value.revision)
   diagnostic.value = { ok: result.OK, text: result.OK ? t('zapretCatalog.testOK', { direct: ref.outboundRef, delay: result.Delay }) : `${ref.outboundRef}: ${result.Error}` }
 })
-function download(record: StrategyRecord) {
+const download = (record: StrategyRecord) => run(async () => {
   if (!view.value) return
-  const url = URL.createObjectURL(new Blob([JSON.stringify(exportRecord(view.value, record), null, 2)], { type: 'application/json' }))
+  const data = await exportRecord(record.definition.id, view.value.revision)
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
   const link = document.createElement('a')
   link.href = url
   link.download = `${record.definition.id}.json`
   link.click()
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
+})
 function importRecord(event: Event) {
   const field = event.target as HTMLInputElement
   const file = field.files?.[0]
@@ -260,5 +357,6 @@ function importRecord(event: Event) {
 <style scoped>
 .zapret-catalog { max-width: 1120px; }
 .profile-fields { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); }
+.list-fields { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 276px), 1fr)); }
 .native-source :deep(textarea) {font-family: ui-monospace, monospace;}
 </style>
