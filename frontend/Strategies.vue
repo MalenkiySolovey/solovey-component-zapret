@@ -64,7 +64,15 @@
           <tr v-for="ref in view.references" :key="ref.outboundRef">
             <td>{{ ref.outboundRef }}</td>
             <td>{{ view.catalog.records[ref.strategyRef]?.name ?? ref.strategyRef }} <code v-if="ref.desiredRevision" :title="ref.desiredRevision">{{ ref.desiredRevision.slice(0, 8) }}</code></td>
-            <td>{{ t(`zapretCatalog.states.${ref.state}`) }} <code v-if="ref.appliedRevision" :title="ref.appliedRevision">{{ ref.appliedRevision.slice(0, 8) }}</code></td>
+            <td>
+              {{ t(`zapretCatalog.states.${ref.state}`) }} <code v-if="ref.appliedRevision" :title="ref.appliedRevision">{{ ref.appliedRevision.slice(0, 8) }}</code>
+              <div v-if="ref.state === 'applied' && ref.nativeMatches" class="text-caption text-break">
+                <template v-if="ref.nativeMatches.profiles?.length">
+                  {{ t('zapretCatalog.observedProfiles') }}: <code>{{ ref.nativeMatches.profiles.join(', ') }}</code>
+                </template>
+                <template v-else>{{ t('zapretCatalog.noObservedProfiles') }}</template>
+              </div>
+            </td>
             <td><code v-if="ref.queue">{{ ref.queue }}</code><span v-else>-</span></td>
             <td><v-btn icon="mdi-pulse" variant="text" :title="t('zapretCatalog.diagnostic')" :aria-label="t('zapretCatalog.diagnostic')" :disabled="busy || ref.state !== 'applied'" @click="runDiagnostic(ref)" /></td>
           </tr>

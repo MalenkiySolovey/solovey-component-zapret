@@ -28,6 +28,11 @@ const (
 
 const defaultQUICBlobName = "fake_default_quic"
 
+const (
+	maxBindings = 3
+	maxProfiles = 16
+)
+
 type Payload string
 
 type AddressFamily string
@@ -79,7 +84,7 @@ var errReturnObservationUnavailable = errors.New("Zapret return-path observation
 // Seal validates and returns a new content-revisioned Strategy. It copies
 // caller-owned slices and normalizes sets without reordering profiles or Lua.
 func Seal(value Strategy) (Strategy, error) {
-	if value.Schema != Schema || !outbounds.ValidZapretStrategyRef(value.ID) || len(value.Profiles) == 0 || len(value.Profiles) > 16 ||
+	if value.Schema != Schema || !outbounds.ValidZapretStrategyRef(value.ID) || len(value.Profiles) == 0 || len(value.Profiles) > maxProfiles ||
 		(len(value.Assets) != 0 && !slices.Equal(value.Assets, []AssetRef{Library, Actions})) {
 		return Strategy{}, ErrInvalidStrategy
 	}
@@ -234,24 +239,35 @@ type MarkedStrategy struct {
 // CompileBindings compiles one listener into disjoint native profile groups.
 // Global Lua setup is performed once; each profile filters its group's mark.
 func CompileBindings(engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy) ([]string, error) {
-	if queue == 0 || loopMark == 0 || loopMark&(loopMark-1) != 0 || len(bindings) == 0 || len(bindings) > 3 ||
+	args, _, err := compileBindings(engineRoot, queue, loopMark, bindings, false)
+	return args, err
+}
+
+// CompileBindingsWithNativeTrace emits one best-effort observation per matched
+// native profile. Connect the fresh trace to this engine's private stdout only.
+func CompileBindingsWithNativeTrace(engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy) ([]string, *NativeTrace, error) {
+	return compileBindings(engineRoot, queue, loopMark, bindings, true)
+}
+
+func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy, trace bool) ([]string, *NativeTrace, error) {
+	if queue == 0 || loopMark == 0 || loopMark&(loopMark-1) != 0 || len(bindings) == 0 || len(bindings) > maxBindings ||
 		!path.IsAbs(engineRoot) || path.Clean(engineRoot) != engineRoot || len(engineRoot) > 512 || strings.ContainsAny(engineRoot, "\x00\r\n") {
-		return nil, errors.New("invalid Zapret engine root or Network Planner allocation")
+		return nil, nil, errors.New("invalid Zapret engine root or Network Planner allocation")
 	}
 	verified := make([]Strategy, len(bindings))
 	seen := make(map[uint32]bool, len(bindings))
 	needsLua := false
 	for i, item := range bindings {
 		if item.QueueMark == 0 || item.QueueMark&loopMark != 0 || seen[item.QueueMark] {
-			return nil, errors.New("invalid or repeated Zapret queue mark")
+			return nil, nil, errors.New("invalid or repeated Zapret queue mark")
 		}
 		seen[item.QueueMark] = true
 		sealed, err := item.Strategy.Verified()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if sealed.NeedsReturn {
-			return nil, errReturnObservationUnavailable
+			return nil, nil, errReturnObservationUnavailable
 		}
 		verified[i] = sealed
 		needsLua = needsLua || len(sealed.Assets) != 0
@@ -260,6 +276,11 @@ func CompileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 	if needsLua {
 		args = append(args, "--lua-init=@"+path.Join(engineRoot, "lua/zapret-lib.lua"),
 			"--lua-init=@"+path.Join(engineRoot, "lua/zapret-antidpi.lua"))
+	}
+	var observations *NativeTrace
+	if trace {
+		args = append(args, "--lua-init="+nativeTraceLua)
+		observations = newNativeTrace(verified)
 	}
 	// Binary data is serialized as hex only. Engine-global Lua variables use
 	// generated names, never catalog IDs or names supplied by the raw editor.
@@ -275,12 +296,12 @@ func CompileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 		}
 	}
 	for i, sealed := range verified {
-		args = appendProfiles(args, sealed, bindings[i].QueueMark, i, len(bindings) > 1, names)
+		args = appendProfiles(args, sealed, bindings[i].QueueMark, i, len(bindings) > 1, names, trace)
 	}
-	return args, nil
+	return args, observations, nil
 }
 
-func appendProfiles(args []string, value Strategy, mark uint32, binding int, groupNames bool, names map[string]string) []string {
+func appendProfiles(args []string, value Strategy, mark uint32, binding int, groupNames bool, names map[string]string, trace bool) []string {
 	for i, profile := range value.Profiles {
 		name := profile.ID
 		if groupNames {
@@ -302,6 +323,9 @@ func appendProfiles(args []string, value Strategy, mark uint32, binding int, gro
 		}
 		args = profile.Lists.appendArgs(args)
 		args = append(args, profile.actionArgs(names[value.BlobData[profile.QUICBlobRef]])...)
+		if trace {
+			args = append(args, fmt.Sprintf("--lua-desync=solovey_profile_match:slot=%d/%d", binding+1, i+1))
+		}
 	}
 	return args
 }

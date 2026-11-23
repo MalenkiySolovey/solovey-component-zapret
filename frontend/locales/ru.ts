@@ -3,6 +3,7 @@ export default { zapretCatalog: {
   edit: 'Изменить стратегию', clone: 'Копировать стратегию', delete: 'Удалить стратегию', empty: 'Нет управляемых стратегий',
   unavailable: 'Компонент Zapret не готов.', references: 'Используется в', bindings: 'Привязки Direct', direct: 'Direct',
   strategy: 'Выбранная стратегия', status: 'Состояние применения', diagnostic: 'Проверить HTTPS через этот Direct',
+  observedProfiles: 'Сработавшие профили движка', noObservedProfiles: 'Срабатываний профилей пока нет',
   states: { off: 'Выкл.', applied: 'Применено', pending: 'Настройки изменены', blocked: 'Блокировка: активный путь не подтверждён' },
   name: 'Имя', tlsPreset: 'Шаблон TLS/TCP', httpPreset: 'Шаблон HTTP/TCP', quicPreset: 'Шаблон QUIC/UDP', visual: 'Профили', raw: 'Параметры nfqws2',
   profile: 'Профиль {index}', profileID: 'ID профиля', protocol: 'Протокол', family: 'Семейство IP', availableFamilies: 'Доступные семейства',

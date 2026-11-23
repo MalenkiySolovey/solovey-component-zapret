@@ -31,6 +31,7 @@ export interface StrategyReference {
   desiredRevision?: string
   appliedRevision?: string
   queue?: number
+  nativeMatches?: { profiles?: string[] }
 }
 export interface CatalogView {
   catalog: { records: Record<string, StrategyRecord>; lists?: Record<string, NamedList>; blobAssets?: Record<string, string> }
