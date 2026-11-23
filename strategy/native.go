@@ -14,6 +14,14 @@ const MaxNativeBytes = 8 << 10
 // editor input, never runnable engine argv.
 // The caller can retain text unchanged for a lossless raw round trip.
 func ParseNative(id, text string) (Strategy, error) {
+	value, err := parseNative(id, text)
+	if err != nil {
+		return Strategy{}, err
+	}
+	return Seal(value)
+}
+
+func parseNative(id, text string) (Strategy, error) {
 	if len(text) > MaxNativeBytes {
 		return Strategy{}, fmt.Errorf("%w: native text exceeds %d bytes", ErrInvalidStrategy, MaxNativeBytes)
 	}
@@ -102,10 +110,18 @@ func ParseNative(id, text string) (Strategy, error) {
 					return Strategy{}, bad
 				}
 				current.SplitAt = uint16(n)
-			} else if repeats, ok := strings.CutPrefix(input, "fake:blob="+defaultQUICBlobName+":repeats="); ok {
+			} else if fake, ok := strings.CutPrefix(input, "fake:blob="); ok {
+				blob, repeats, ok := strings.Cut(fake, ":repeats=")
 				n, err := strconv.ParseUint(repeats, 10, 8)
-				if err != nil || n == 0 {
+				if !ok || err != nil || n == 0 {
 					return Strategy{}, bad
+				}
+				if blob != defaultQUICBlobName {
+					id, ok := strings.CutPrefix(blob, nativeBlobRefPrefix)
+					if !ok || id == "" {
+						return Strategy{}, bad
+					}
+					current.QUICBlobRef = id
 				}
 				current.QUICRepeats = uint8(n)
 			} else {
@@ -123,7 +139,7 @@ func ParseNative(id, text string) (Strategy, error) {
 	if err := finish(); err != nil {
 		return Strategy{}, err
 	}
-	return Seal(value)
+	return value, nil
 }
 
 // FormatNative is used only when a visual edit changes the parsed profiles.
@@ -156,7 +172,11 @@ func FormatNative(value Strategy) (string, error) {
 		for _, arg := range profile.Lists.appendArgs(nil) {
 			fmt.Fprintln(&text, arg)
 		}
-		for _, arg := range profile.actionArgs() {
+		var blob string
+		if profile.QUICBlobRef != "" {
+			blob = nativeBlobRefPrefix + profile.QUICBlobRef
+		}
+		for _, arg := range profile.actionArgs(blob) {
 			fmt.Fprintln(&text, arg)
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -28,9 +29,10 @@ type Record struct {
 }
 
 type Catalog struct {
-	Schema  string               `json:"schema"`
-	Records map[string]Record    `json:"records"`
-	Lists   map[string]NamedList `json:"lists,omitempty"`
+	Schema     string               `json:"schema"`
+	Records    map[string]Record    `json:"records"`
+	Lists      map[string]NamedList `json:"lists,omitempty"`
+	BlobAssets map[string]string    `json:"blobAssets,omitempty"`
 }
 
 type Draft struct {
@@ -41,8 +43,8 @@ type Draft struct {
 	ListRefs ListRefs  `json:"listRefs,omitempty"`
 }
 
-// Transfer binds the strategy to the immutable engine and built-in assets.
-// Referenced lists travel with the strategy; imports install no files or scripts.
+// Transfer binds the strategy to the immutable engine and assets. Referenced
+// native data travels with the strategy; imports install no files or scripts.
 type Transfer struct {
 	Schema       string               `json:"schema"`
 	EngineCommit string               `json:"engineCommit"`
@@ -51,6 +53,7 @@ type Transfer struct {
 	Blobs        []AssetRef           `json:"blobs,omitempty"`
 	Strategy     Record               `json:"strategy"`
 	Lists        map[string]NamedList `json:"lists,omitempty"`
+	BlobAssets   map[string]string    `json:"blobAssets,omitempty"`
 }
 
 func SealDraft(d Draft) (Record, error) { return (Catalog{}).SealDraft(d) }
@@ -72,13 +75,24 @@ func (c Catalog) SealDraft(d Draft) (Record, error) {
 				compiled.Assets = []AssetRef{Library, Actions}
 			}
 		}
-		var err error
+		compiled, err := c.resolveBlobs(compiled)
+		if err != nil {
+			return Record{}, err
+		}
 		raw, err = FormatNative(compiled)
 		if err != nil {
 			return Record{}, err
 		}
 	}
-	definition, err := ParseNative(d.ID, raw)
+	definition, err := parseNative(d.ID, raw)
+	if err != nil {
+		return Record{}, err
+	}
+	definition, err = c.resolveBlobs(definition)
+	if err != nil {
+		return Record{}, err
+	}
+	definition, err = Seal(definition)
 	if err != nil {
 		return Record{}, err
 	}
@@ -102,7 +116,7 @@ func (c Catalog) validateRecord(r Record) error {
 // Use Catalog.Export when a record references catalog-owned lists.
 func (r Record) Export() Transfer {
 	return Transfer{Schema: TransferSchema, EngineCommit: EngineCommit, License: EngineLicense,
-		Assets: r.Definition.Assets, Blobs: r.Definition.BlobRefs(), Strategy: r}
+		Assets: r.Definition.Assets, Blobs: r.Definition.BlobRefs(), Strategy: r, BlobAssets: maps.Clone(r.Definition.BlobData)}
 }
 
 func (t Transfer) Import() (Draft, error) {
@@ -119,8 +133,11 @@ func (t Transfer) Import() (Draft, error) {
 			return Draft{}, errors.New("strategy blob does not match its pinned native action")
 		}
 	}
-	c := Catalog{Lists: t.Lists}
+	c := Catalog{Lists: t.Lists, BlobAssets: t.BlobAssets}
 	if err := c.validateLists(); err != nil {
+		return Draft{}, err
+	}
+	if err := c.validateBlobAssets(); err != nil {
 		return Draft{}, err
 	}
 	if err := c.validateRecord(t.Strategy); err != nil {
@@ -128,6 +145,9 @@ func (t Transfer) Import() (Draft, error) {
 	}
 	if len(t.Lists) != len(namedListIDs(t.Strategy.ListRefs)) {
 		return Draft{}, errors.New("transfer includes unused native lists")
+	}
+	if len(t.BlobAssets) != len(t.Strategy.Definition.BlobData) {
+		return Draft{}, errors.New("transfer includes unused native blobs")
 	}
 	return Draft{ID: t.Strategy.Definition.ID, Name: t.Strategy.Name, Raw: &t.Strategy.Raw, ListRefs: t.Strategy.ListRefs}, nil
 }
@@ -137,6 +157,9 @@ func (c Catalog) Validate() error {
 		return errors.New("invalid Zapret catalog or too many strategies")
 	}
 	if err := c.validateLists(); err != nil {
+		return err
+	}
+	if err := c.validateBlobAssets(); err != nil {
 		return err
 	}
 	for id, record := range c.Records {

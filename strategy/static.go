@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"path"
 	"slices"
 	"strconv"
@@ -43,7 +44,7 @@ const (
 )
 
 // A profile can observe packets without changing them, split a known TCP
-// payload, or emit the pinned upstream QUIC Initial blob alongside the original.
+// payload, or emit a bounded QUIC decoy alongside the original.
 type Profile struct {
 	ID          string                `json:"id"`
 	Protocol    intent.PacketProtocol `json:"protocol"`
@@ -51,17 +52,19 @@ type Profile struct {
 	Payload     Payload               `json:"payload,omitempty"`
 	SplitAt     uint16                `json:"splitAt,omitempty"`
 	QUICRepeats uint8                 `json:"quicRepeats,omitempty"`
+	QUICBlobRef string                `json:"quicBlobRef,omitempty"`
 	Family      AddressFamily         `json:"family,omitempty"` // Empty matches either admitted family.
 	Lists       *NativeLists          `json:"lists,omitempty"`
 }
 
 type Strategy struct {
-	Schema      string     `json:"schema"`
-	ID          string     `json:"id"`
-	Revision    string     `json:"revision"`
-	NeedsReturn bool       `json:"needsReturn,omitempty"`
-	Assets      []AssetRef `json:"assets,omitempty"`
-	Profiles    []Profile  `json:"profiles"` // selection order is significant
+	Schema      string            `json:"schema"`
+	ID          string            `json:"id"`
+	Revision    string            `json:"revision"`
+	NeedsReturn bool              `json:"needsReturn,omitempty"`
+	Assets      []AssetRef        `json:"assets,omitempty"`
+	Profiles    []Profile         `json:"profiles"` // selection order is significant
+	BlobData    map[string]string `json:"blobData,omitempty"`
 }
 
 type Scope struct {
@@ -82,6 +85,7 @@ func Seal(value Strategy) (Strategy, error) {
 	}
 	value.Assets = slices.Clone(value.Assets)
 	value.Profiles = slices.Clone(value.Profiles)
+	value.BlobData = maps.Clone(value.BlobData)
 	seen := map[string]bool{}
 	listBytes := maxNativeListBytes
 	for i, profile := range value.Profiles {
@@ -108,6 +112,9 @@ func Seal(value Strategy) (Strategy, error) {
 		}
 		value.Profiles[i] = profile
 	}
+	if err := value.validateBlobs(); err != nil {
+		return Strategy{}, err
+	}
 	scope := value.scope("")
 	if len(scope.TCP) > 64 || len(scope.UDP) > 64 {
 		return Strategy{}, ErrInvalidStrategy
@@ -117,6 +124,9 @@ func Seal(value Strategy) (Strategy, error) {
 	if err != nil {
 		return Strategy{}, ErrInvalidStrategy
 	}
+	if len(value.BlobData) != 0 && len(data)+64 > maxBlobDefinitionBytes {
+		return Strategy{}, fmt.Errorf("%w: native blob strategy exceeds the runtime definition budget", ErrInvalidStrategy)
+	}
 	value.Revision = fmt.Sprintf("%x", sha256.Sum256(data))
 	return value, nil
 }
@@ -124,6 +134,9 @@ func Seal(value Strategy) (Strategy, error) {
 func (p Profile) hasAction() bool { return p.SplitAt != 0 || p.QUICRepeats != 0 }
 
 func (p Profile) validAction() bool {
+	if p.QUICBlobRef != "" && (p.QUICRepeats == 0 || !outbounds.ValidZapretStrategyRef(p.QUICBlobRef)) {
+		return false
+	}
 	switch {
 	case p.SplitAt != 0:
 		return p.Protocol == intent.PacketProtocolTCP && p.SplitAt <= 128 && p.QUICRepeats == 0 &&
@@ -143,11 +156,10 @@ func (value Strategy) Verified() (Strategy, error) {
 	return sealed, nil
 }
 
-// BlobRefs reports the immutable data used by the native actions. The
-// compiler does not accept external blob paths or user-supplied payloads.
+// BlobRefs reports the pinned built-in data used by the native actions.
 func (value Strategy) BlobRefs() []AssetRef {
 	for _, p := range value.Profiles {
-		if p.QUICRepeats != 0 {
+		if p.QUICRepeats != 0 && p.QUICBlobRef == "" {
 			return []AssetRef{DefaultQUICBlob}
 		}
 	}
@@ -195,7 +207,7 @@ func (value Strategy) scope(family AddressFamily) Scope {
 func (value Strategy) HandlesQUIC(family AddressFamily, port uint16) bool {
 	for _, p := range value.Profiles {
 		if p.Protocol == intent.PacketProtocolUDP && (p.Family == "" || p.Family == family) && slices.Contains(p.Ports, port) {
-			if p.QUICRepeats == 0 {
+			if p.QUICRepeats == 0 || p.QUICBlobRef != "" {
 				return false
 			}
 			if p.Lists == nil {
@@ -249,14 +261,27 @@ func CompileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 		args = append(args, "--lua-init=@"+path.Join(engineRoot, "lua/zapret-lib.lua"),
 			"--lua-init=@"+path.Join(engineRoot, "lua/zapret-antidpi.lua"))
 	}
+	// Binary data is serialized as hex only. Engine-global Lua variables use
+	// generated names, never catalog IDs or names supplied by the raw editor.
+	names := map[string]string{}
+	for _, value := range verified {
+		for _, p := range value.Profiles {
+			data := value.BlobData[p.QUICBlobRef]
+			if data != "" && names[data] == "" {
+				name := fmt.Sprintf("solovey_blob_%d", len(names)+1)
+				names[data] = name
+				args = append(args, "--blob="+name+":0x"+data)
+			}
+		}
+	}
 	for i, sealed := range verified {
-		args = appendProfiles(args, sealed.Profiles, bindings[i].QueueMark, i, len(bindings) > 1)
+		args = appendProfiles(args, sealed, bindings[i].QueueMark, i, len(bindings) > 1, names)
 	}
 	return args, nil
 }
 
-func appendProfiles(args []string, profiles []Profile, mark uint32, binding int, groupNames bool) []string {
-	for i, profile := range profiles {
+func appendProfiles(args []string, value Strategy, mark uint32, binding int, groupNames bool, names map[string]string) []string {
+	for i, profile := range value.Profiles {
 		name := profile.ID
 		if groupNames {
 			name = fmt.Sprintf("b%d-p%d", binding+1, i+1)
@@ -276,7 +301,7 @@ func appendProfiles(args []string, profiles []Profile, mark uint32, binding int,
 			args = append(args, "--filter-l3="+string(profile.Family))
 		}
 		args = profile.Lists.appendArgs(args)
-		args = append(args, profile.actionArgs()...)
+		args = append(args, profile.actionArgs(names[value.BlobData[profile.QUICBlobRef]])...)
 	}
 	return args
 }
@@ -294,13 +319,16 @@ func payloadProtocol(value Payload) string {
 	}
 }
 
-func (p Profile) actionArgs() []string {
+func (p Profile) actionArgs(blob string) []string {
 	var lua string
 	switch {
 	case p.SplitAt != 0:
 		lua = fmt.Sprintf("multisplit:pos=%d", p.SplitAt)
 	case p.QUICRepeats != 0:
-		lua = fmt.Sprintf("fake:blob=%s:repeats=%d", defaultQUICBlobName, p.QUICRepeats)
+		if blob == "" {
+			blob = defaultQUICBlobName
+		}
+		lua = fmt.Sprintf("fake:blob=%s:repeats=%d", blob, p.QUICRepeats)
 	default:
 		return nil
 	}

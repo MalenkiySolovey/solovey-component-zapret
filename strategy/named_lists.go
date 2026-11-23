@@ -196,8 +196,8 @@ func (c Catalog) Export(id string) (Transfer, error) {
 	return t, nil
 }
 
-// WithTransfer imports the selected strategy and its list dependencies. It
-// refuses to replace a same-name list with different content.
+// WithTransfer imports the selected strategy and its asset dependencies. It
+// refuses to replace a same-name asset with different content.
 func (c Catalog) WithTransfer(id string, t Transfer) (Catalog, error) {
 	if err := c.Validate(); err != nil {
 		return Catalog{}, err
@@ -222,6 +222,21 @@ func (c Catalog) WithTransfer(id string, t Transfer) (Catalog, error) {
 	}
 	if len(c.Lists) > NamedListLimit {
 		return Catalog{}, errors.New("too many named native lists")
+	}
+	if len(t.BlobAssets) != 0 {
+		c.BlobAssets = maps.Clone(c.BlobAssets)
+		if c.BlobAssets == nil {
+			c.BlobAssets = make(map[string]string)
+		}
+		for name, data := range t.BlobAssets {
+			if current, exists := c.BlobAssets[name]; exists && current != data {
+				return Catalog{}, fmt.Errorf("native blob %q conflicts with an existing asset", name)
+			}
+			c.BlobAssets[name] = data
+		}
+		if err := c.validateBlobAssets(); err != nil {
+			return Catalog{}, err
+		}
 	}
 	draft.ID = id
 	record, err := c.SealDraft(draft)

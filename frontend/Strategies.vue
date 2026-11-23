@@ -33,11 +33,27 @@
         <v-list-item v-for="[id, list] in namedLists" :key="id" :title="id" :subtitle="`${t(`zapretCatalog.${list.kind}Kind`)} · ${list.entries.length}`">
           <template #append>
             <v-btn icon="mdi-pencil-outline" variant="text" :aria-label="t('zapretCatalog.editList')" :title="t('zapretCatalog.editList')" :disabled="busy" @click="openList(id, list)" />
-            <v-btn icon="mdi-delete-outline" variant="text" :aria-label="t('zapretCatalog.deleteList')" :title="t('zapretCatalog.deleteList')" :disabled="busy || listConsumers(id).length > 0" @click="deletingList = id" />
+            <v-btn icon="mdi-delete-outline" variant="text" :aria-label="t('zapretCatalog.deleteList')" :title="t('zapretCatalog.deleteList')" :disabled="busy || listConsumers(id).length > 0" @click="deletingAsset = { id, blob: false }" />
           </template>
           <div v-if="listConsumers(id).length" class="text-caption mt-1">{{ t('zapretCatalog.references') }}: {{ listConsumers(id).map(record => record.name).join(', ') }}</div>
         </v-list-item>
         <v-list-item v-if="!namedLists.length" :title="t('zapretCatalog.noLists')" />
+      </v-list>
+    </section>
+    <section v-if="view" class="mb-4" aria-labelledby="zapret-native-blob-title">
+      <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-2">
+        <h3 id="zapret-native-blob-title">{{ t('zapretCatalog.sharedBlobs') }}</h3>
+        <v-btn prepend-icon="mdi-plus" variant="tonal" :disabled="busy || namedBlobs.length >= 8" @click="openList('', undefined, '')">{{ t('zapretCatalog.newBlob') }}</v-btn>
+      </div>
+      <v-list density="compact" class="border rounded-lg">
+        <v-list-item v-for="[id, data] in namedBlobs" :key="id" :title="id" :subtitle="t('zapretCatalog.blobSize', { count: data.length / 2 })">
+          <template #append>
+            <v-btn icon="mdi-pencil-outline" variant="text" :aria-label="t('zapretCatalog.editBlob')" :title="t('zapretCatalog.editBlob')" :disabled="busy" @click="openList(id, undefined, data)" />
+            <v-btn icon="mdi-delete-outline" variant="text" :aria-label="t('zapretCatalog.deleteBlob')" :title="t('zapretCatalog.deleteBlob')" :disabled="busy || blobConsumers(id).length > 0" @click="deletingAsset = { id, blob: true }" />
+          </template>
+          <div v-if="blobConsumers(id).length" class="text-caption mt-1">{{ t('zapretCatalog.references') }}: {{ blobConsumers(id).map(record => record.name).join(', ') }}</div>
+        </v-list-item>
+        <v-list-item v-if="!namedBlobs.length" :title="t('zapretCatalog.noBlobs')" />
       </v-list>
     </section>
     <section v-if="view?.references.length" aria-labelledby="zapret-binding-status">
@@ -99,6 +115,8 @@
                 <v-text-field v-if="row.payload === 'quic_initial'" v-model="row.quicRepeats" type="number" min="1" max="4" :label="t('zapretCatalog.quicRepeats')" hide-details density="compact" @update:model-value="visualChanged = true" />
                 <v-text-field v-else-if="row.payload" v-model="row.splitAt" type="number" min="1" max="128" :label="t('zapretCatalog.split')" hide-details density="compact" @update:model-value="visualChanged = true" />
               </div>
+              <v-select v-if="row.payload === 'quic_initial' && blobChoices.length > 1" v-model="row.quicBlobRef" :items="blobChoices"
+                :label="t('zapretCatalog.quicBlob')" class="mt-2" hide-details density="compact" @update:model-value="visualChanged = true" />
               <details class="mt-2" :open="listFields.some(field => row.lists[field] !== '' || row.refs[field]) || undefined">
                 <summary>{{ t('zapretCatalog.nativeLists') }}</summary>
                 <div class="list-fields mt-2">
@@ -130,13 +148,14 @@
       </v-card>
     </v-dialog>
     <v-dialog v-model="listEditing" max-width="520" persistent>
-      <v-card :title="t(listActiveID ? 'zapretCatalog.editList' : 'zapretCatalog.newList')">
+      <v-card :title="t(editingBlob ? (listActiveID ? 'zapretCatalog.editBlob' : 'zapretCatalog.newBlob') : (listActiveID ? 'zapretCatalog.editList' : 'zapretCatalog.newList'))">
         <v-card-text>
           <v-alert v-if="dialogError" type="error" variant="tonal" class="mb-3">{{ dialogError }}</v-alert>
           <v-alert v-if="listAffected.length" type="warning" variant="tonal" class="mb-3">{{ t('zapretCatalog.editAffects', { refs: listAffected.join(', ') }) }}</v-alert>
-          <v-text-field v-model="listID" :label="t('zapretCatalog.listID')" :readonly="!!listActiveID" maxlength="64" />
-          <v-select v-model="listKind" :items="listKinds" :label="t('zapretCatalog.listKind')" :readonly="!!listActiveID" />
-          <v-textarea v-model="listEntries" :label="t('zapretCatalog.listEntries')" rows="5" maxlength="2048" spellcheck="false" />
+          <v-text-field v-model="listID" :label="t(editingBlob ? 'zapretCatalog.blobID' : 'zapretCatalog.listID')" :readonly="!!listActiveID" maxlength="64" />
+          <v-select v-if="!editingBlob" v-model="listKind" :items="listKinds" :label="t('zapretCatalog.listKind')" :readonly="!!listActiveID" />
+          <v-textarea v-model="listEntries" :label="t(editingBlob ? 'zapretCatalog.blobHex' : 'zapretCatalog.listEntries')" rows="5"
+            :maxlength="editingBlob ? 2400 : 2048" spellcheck="false" />
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -145,10 +164,10 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
-    <v-dialog :model-value="deletingList !== ''" max-width="440" @update:model-value="deletingList = ''">
-      <v-card :title="t('zapretCatalog.deleteList')" :text="t('zapretCatalog.deleteConfirm', { name: deletingList })">
-        <v-card-actions><v-spacer /><v-btn :disabled="busy" @click="deletingList = ''">{{ t('zapretCatalog.cancel') }}</v-btn>
-          <v-btn color="error" :loading="busy" @click="removeList">{{ t('zapretCatalog.deleteList') }}</v-btn></v-card-actions>
+    <v-dialog :model-value="!!deletingAsset" max-width="440" @update:model-value="deletingAsset = undefined">
+      <v-card :title="deleteAssetLabel" :text="t('zapretCatalog.deleteConfirm', { name: deletingAsset?.id })">
+        <v-card-actions><v-spacer /><v-btn :disabled="busy" @click="deletingAsset = undefined">{{ t('zapretCatalog.cancel') }}</v-btn>
+          <v-btn color="error" :loading="busy" @click="removeList">{{ deleteAssetLabel }}</v-btn></v-card-actions>
       </v-card>
     </v-dialog>
   </v-container>
@@ -161,7 +180,7 @@ import { diagnose, draftToSave, exportRecord, loadCatalog, preview, saveCatalog,
 
 const { t } = useI18n()
 type Row = { key: number; id: string; protocol: Profile['protocol']; family: NonNullable<Profile['family']> | ''; ports: string;
-  payload: NonNullable<Profile['payload']> | ''; splitAt: string; quicRepeats: string; lists: Record<NativeListField, string>; refs: ProfileListRefs }
+  payload: NonNullable<Profile['payload']> | ''; splitAt: string; quicRepeats: string; quicBlobRef: string; lists: Record<NativeListField, string>; refs: ProfileListRefs }
 const listFields = ['hostList', 'hostListExclude', 'ipSet', 'ipSetExclude'] as const
 const view = ref<CatalogView>()
 const busy = ref(false)
@@ -179,7 +198,9 @@ const listID = ref('')
 const listKind = ref<ListKind>('hostList')
 const listEntries = ref('')
 const listEditorRevision = ref('')
-const deletingList = ref('')
+const editingBlob = ref(false)
+const deletingAsset = ref<{ id: string; blob: boolean }>()
+const deleteAssetLabel = computed(() => t(deletingAsset.value?.blob ? 'zapretCatalog.deleteBlob' : 'zapretCatalog.deleteList'))
 const name = ref('')
 const raw = ref('')
 const rawRefs = ref<ListRefs>({})
@@ -189,18 +210,22 @@ const visualChanged = ref(false)
 let rowKey = 0
 const records = computed(() => Object.values(view.value?.catalog.records ?? {}).sort((a, b) => a.name.localeCompare(b.name)))
 const namedLists = computed(() => Object.entries(view.value?.catalog.lists ?? {}).sort(([a], [b]) => a.localeCompare(b)))
+const namedBlobs = computed(() => Object.entries(view.value?.catalog.blobAssets ?? {}).sort(([a], [b]) => a.localeCompare(b)))
+const blobChoices = computed(() => [{ title: t('zapretCatalog.defaultBlob'), value: '' }, ...namedBlobs.value.map(([id]) => ({ title: id, value: id }))])
 const listKinds = computed<{ title: string; value: ListKind }[]>(() => [
   { title: t('zapretCatalog.hostListKind'), value: 'hostList' }, { title: t('zapretCatalog.ipSetKind'), value: 'ipSet' },
 ])
 const listChoices = (field: NativeListField) => namedLists.value.filter(([, list]) => list.kind === (field.startsWith('hostList') ? 'hostList' : 'ipSet')).map(([id]) => id)
 const listConsumers = (id: string) => records.value.filter(record => Object.values(record.listRefs ?? {}).some(refs => Object.values(refs).includes(id)))
+const blobConsumers = (id: string) => records.value.filter(record => record.definition.profiles.some(p => p.quicBlobRef === id))
 const families = computed(() => [{ title: t('zapretCatalog.availableFamilies'), value: '' }, { title: 'IPv4', value: 'ipv4' }, { title: 'IPv6', value: 'ipv6' }])
 const payloads = (protocol: Profile['protocol']) => [{ title: t('zapretCatalog.passive'), value: '' }, ...(protocol === 'udp'
   ? [{ title: 'QUIC Initial', value: 'quic_initial' }]
   : [{ title: 'TLS ClientHello', value: 'tls_client_hello' }, { title: 'HTTP request', value: 'http_req' }])]
 const refsFor = (id: string) => view.value?.references.filter(ref => ref.strategyRef === id) ?? []
 const affected = computed(() => refsFor(activeID.value).filter(ref => ref.enabled))
-const listAffected = computed(() => listActiveID.value ? listConsumers(listActiveID.value).flatMap(record => refsFor(record.definition.id).filter(ref => ref.enabled).map(ref => ref.outboundRef)) : [])
+const listAffected = computed(() => listActiveID.value ? (editingBlob.value ? blobConsumers : listConsumers)(listActiveID.value)
+  .flatMap(record => refsFor(record.definition.id).filter(ref => ref.enabled).map(ref => ref.outboundRef)) : [])
 const errorText = (err: unknown) => {
   const detail = (err as { response?: { data?: { msg?: unknown } } })?.response?.data?.msg
   return typeof detail === 'string' ? detail : err instanceof Error ? err.message : t('zapretCatalog.unavailable')
@@ -225,7 +250,7 @@ function withRows(record?: StrategyRecord) {
     const lists = listText(p.lists)
     for (const field of listFields) if (refs[field]) lists[field] = ''
     return { key: ++rowKey, id: p.id, protocol: p.protocol, family: p.family ?? '', ports: p.ports.join(','),
-      payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9), quicRepeats: String(p.quicRepeats ?? 1), lists, refs }
+      payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9), quicRepeats: String(p.quicRepeats ?? 1), quicBlobRef: p.quicBlobRef ?? '', lists, refs }
   })
 }
 function setListRef(row: Row, field: NativeListField, value: string | null) {
@@ -237,12 +262,13 @@ function changeProtocol(row: Row, protocol: Profile['protocol']) {
   if (row.protocol === protocol) return
   row.protocol = protocol
   row.payload = ''
+  row.quicBlobRef = ''
   visualChanged.value = true
 }
 function addProfile() {
   let index = 1
   while (rows.value.some(row => row.id === `profile-${index}`)) index++
-  rows.value.push({ key: ++rowKey, id: `profile-${index}`, protocol: 'tcp', family: '', ports: '443', payload: '', splitAt: '9', quicRepeats: '1', lists: listText(), refs: {} })
+  rows.value.push({ key: ++rowKey, id: `profile-${index}`, protocol: 'tcp', family: '', ports: '443', payload: '', splitAt: '9', quicRepeats: '1', quicBlobRef: '', lists: listText(), refs: {} })
   visualChanged.value = true
 }
 function remove(index: number) { rows.value.splice(index, 1); visualChanged.value = true }
@@ -253,7 +279,7 @@ function move(index: number, offset: number) {
 }
 function preset(payload: NonNullable<Profile['payload']>, ports: string) {
   rows.value = [{ key: ++rowKey, id: 'profile-1', protocol: payload === 'quic_initial' ? 'udp' : 'tcp', family: '', ports, payload,
-    splitAt: '9', quicRepeats: '1', lists: listText(), refs: {} }]
+    splitAt: '9', quicRepeats: '1', quicBlobRef: '', lists: listText(), refs: {} }]
   mode.value = 'visual'
   visualChanged.value = true
 }
@@ -277,7 +303,8 @@ function draft() {
       if (entries.length) lists[field] = entries
     }
     return { id: row.id.trim(), protocol: row.protocol, ports: row.ports.split(',').map(port => Number(port.trim())),
-      ...(row.family ? { family: row.family } : {}), ...(row.payload === 'quic_initial' ? { payload: row.payload, quicRepeats: Number(row.quicRepeats) }
+      ...(row.family ? { family: row.family } : {}), ...(row.payload === 'quic_initial' ? { payload: row.payload, quicRepeats: Number(row.quicRepeats),
+        ...(row.quicBlobRef ? { quicBlobRef: row.quicBlobRef } : {}) }
         : row.payload ? { payload: row.payload, splitAt: Number(row.splitAt) } : {}), ...(Object.keys(lists).length ? { lists } : {}) }
   })
   const refs = visualChanged.value ? Object.fromEntries(rows.value.filter(row => Object.keys(row.refs).length).map(row => [row.id.trim(), row.refs])) : rawRefs.value
@@ -305,23 +332,26 @@ const removeRecord = () => run(async () => {
   view.value = await saveCatalog({ action: 'delete', id: deleteRecord.value.definition.id, expectedRevision: view.value.revision })
   deleteRecord.value = undefined
 })
-function openList(id = '', list?: NamedList) {
+function openList(id = '', list?: NamedList, blob?: string) {
+  editingBlob.value = blob !== undefined
   listActiveID.value = listID.value = id
   listEditorRevision.value = view.value?.revision ?? ''
   listKind.value = list?.kind ?? 'hostList'
-  listEntries.value = list?.entries.join('\n') ?? ''
+  listEntries.value = blob ?? list?.entries.join('\n') ?? ''
   dialogError.value = ''
   listEditing.value = true
 }
 const saveList = () => run(async () => {
-  view.value = await saveCatalog({ action: listActiveID.value ? 'edit-list' : 'create-list', id: listID.value.trim(),
-    expectedRevision: listEditorRevision.value, list: { kind: listKind.value, entries: listEntries.value.split(/[\s,]+/).filter(Boolean) } })
+  const action = `${listActiveID.value ? 'edit' : 'create'}-${editingBlob.value ? 'blob' : 'list'}`
+  const data = editingBlob.value ? { blob: listEntries.value.trim() } : { list: { kind: listKind.value, entries: listEntries.value.split(/[\s,]+/).filter(Boolean) } }
+  view.value = await saveCatalog({ action, id: listID.value.trim(), expectedRevision: listEditorRevision.value, ...data })
   listEditing.value = false
 }, true)
 const removeList = () => run(async () => {
-  if (!deletingList.value || !view.value) return
-  view.value = await saveCatalog({ action: 'delete-list', id: deletingList.value, expectedRevision: view.value.revision })
-  deletingList.value = ''
+  const asset = deletingAsset.value
+  if (!asset || !view.value) return
+  view.value = await saveCatalog({ action: asset.blob ? 'delete-blob' : 'delete-list', id: asset.id, expectedRevision: view.value.revision })
+  deletingAsset.value = undefined
 })
 const runDiagnostic = (ref: StrategyReference) => run(async () => {
   if (!view.value) return
