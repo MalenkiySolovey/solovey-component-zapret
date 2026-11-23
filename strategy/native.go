@@ -102,7 +102,7 @@ func ParseNative(id, text string) (Strategy, error) {
 					return Strategy{}, bad
 				}
 				current.SplitAt = uint16(n)
-			} else if repeats, ok := strings.CutPrefix(input, "fake:blob=fake_default_quic:repeats="); ok {
+			} else if repeats, ok := strings.CutPrefix(input, "fake:blob="+defaultQUICBlobName+":repeats="); ok {
 				n, err := strconv.ParseUint(repeats, 10, 8)
 				if err != nil || n == 0 {
 					return Strategy{}, bad
