@@ -1,6 +1,10 @@
 import api from '@solovey/component-ui/api'
 
 export type NativeListField = 'hostList' | 'hostListExclude' | 'ipSet' | 'ipSetExclude'
+export type ListKind = 'hostList' | 'ipSet'
+export type NamedList = { kind: ListKind; entries: string[] }
+export type ProfileListRefs = Partial<Record<NativeListField, string>>
+export type ListRefs = Record<string, ProfileListRefs>
 
 export interface Profile {
   id: string
@@ -16,6 +20,7 @@ export interface StrategyRecord {
   name: string
   raw: string
   definition: { id: string; revision: string; assets?: string[]; profiles: Profile[] }
+  listRefs?: ListRefs
 }
 export interface StrategyReference {
   outboundRef: string
@@ -27,15 +32,12 @@ export interface StrategyReference {
   queue?: number
 }
 export interface CatalogView {
-  catalog: { records: Record<string, StrategyRecord> }
+  catalog: { records: Record<string, StrategyRecord>; lists?: Record<string, NamedList> }
   revision: string
   ready: boolean
   references: StrategyReference[]
-  transferSchema: string
-  engineCommit: string
-  engineLicense: string
 }
-export type Draft = { name: string } & ({ raw: string } | { profiles: Profile[] })
+export type Draft = { name: string; listRefs?: ListRefs } & ({ raw: string } | { profiles: Profile[] })
 
 interface Envelope<T> { success: boolean; msg: string; obj: T }
 const base = 'api/components/zapret'
@@ -50,16 +52,16 @@ export async function loadCatalog(): Promise<CatalogView> {
   return unwrap(await api.get<Envelope<CatalogView>>(`${base}/strategies`))
 }
 export const saveCatalog = (change: object) => post<CatalogView>('strategies', change)
-export const preview = (draft: Draft) => post<StrategyRecord>('strategies/preview', draft)
+export const preview = (draft: Draft, expectedRevision: string) => post<StrategyRecord>('strategies/preview', { ...draft, expectedRevision })
 export const diagnose = (ref: StrategyReference, revision: string) => post<{ OK: boolean; Delay: number; Error: string }>('diagnose', {
   outboundRef: ref.outboundRef, strategyRef: ref.strategyRef, expectedRevision: revision,
 })
 
-export function exportRecord(catalog: CatalogView, record: StrategyRecord) {
-  return { schema: catalog.transferSchema, engineCommit: catalog.engineCommit, license: catalog.engineLicense,
-    assets: record.definition.assets ?? [], strategy: record }
+export async function exportRecord(id: string, expectedRevision: string): Promise<unknown> {
+  return unwrap(await api.get<Envelope<unknown>>(`${base}/strategies/${encodeURIComponent(id)}/export`, { params: { expectedRevision } }))
 }
 
-export function draftToSave(name: string, raw: string, profiles: Profile[], visualChanged: boolean): Draft {
-  return visualChanged ? { name, profiles } : { name, raw }
+export function draftToSave(name: string, raw: string, profiles: Profile[], visualChanged: boolean, listRefs: ListRefs): Draft {
+  const source = visualChanged ? { profiles } : { raw }
+  return { name, ...source, ...(Object.keys(listRefs).length ? { listRefs } : {}) }
 }

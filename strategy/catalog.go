@@ -24,11 +24,13 @@ type Record struct {
 	Name       string   `json:"name"`
 	Raw        string   `json:"raw"`
 	Definition Strategy `json:"definition"`
+	ListRefs   ListRefs `json:"listRefs,omitempty"`
 }
 
 type Catalog struct {
-	Schema  string            `json:"schema"`
-	Records map[string]Record `json:"records"`
+	Schema  string               `json:"schema"`
+	Records map[string]Record    `json:"records"`
+	Lists   map[string]NamedList `json:"lists,omitempty"`
 }
 
 type Draft struct {
@@ -36,19 +38,24 @@ type Draft struct {
 	Name     string    `json:"name"`
 	Raw      *string   `json:"raw,omitempty"`
 	Profiles []Profile `json:"profiles,omitempty"`
+	ListRefs ListRefs  `json:"listRefs,omitempty"`
 }
 
 // Transfer binds the strategy to the immutable engine and built-in assets.
-// Inline lists travel as strategy data; imports install no files or scripts.
+// Referenced lists travel with the strategy; imports install no files or scripts.
 type Transfer struct {
-	Schema       string     `json:"schema"`
-	EngineCommit string     `json:"engineCommit"`
-	License      string     `json:"license"`
-	Assets       []AssetRef `json:"assets,omitempty"`
-	Strategy     Record     `json:"strategy"`
+	Schema       string               `json:"schema"`
+	EngineCommit string               `json:"engineCommit"`
+	License      string               `json:"license"`
+	Assets       []AssetRef           `json:"assets,omitempty"`
+	Blobs        []AssetRef           `json:"blobs,omitempty"`
+	Strategy     Record               `json:"strategy"`
+	Lists        map[string]NamedList `json:"lists,omitempty"`
 }
 
-func SealDraft(d Draft) (Record, error) {
+func SealDraft(d Draft) (Record, error) { return (Catalog{}).SealDraft(d) }
+
+func (c Catalog) SealDraft(d Draft) (Record, error) {
 	if d.Name == "" || len(d.Name) > 120 || !utf8.ValidString(d.Name) || strings.TrimSpace(d.Name) != d.Name || strings.ContainsFunc(d.Name, unicode.IsControl) {
 		return Record{}, errors.New("enter a strategy name of at most 120 UTF-8 bytes")
 	}
@@ -75,11 +82,13 @@ func SealDraft(d Draft) (Record, error) {
 	if err != nil {
 		return Record{}, err
 	}
-	return Record{Name: d.Name, Raw: raw, Definition: definition}, nil
+	return c.withResolvedLists(Record{Name: d.Name, Raw: raw, Definition: definition, ListRefs: d.ListRefs})
 }
 
-func (r Record) Validate() error {
-	checked, err := SealDraft(Draft{ID: r.Definition.ID, Name: r.Name, Raw: &r.Raw})
+func (r Record) Validate() error { return (Catalog{}).validateRecord(r) }
+
+func (c Catalog) validateRecord(r Record) error {
+	checked, err := c.SealDraft(Draft{ID: r.Definition.ID, Name: r.Name, Raw: &r.Raw, ListRefs: r.ListRefs})
 	if err != nil {
 		return err
 	}
@@ -89,9 +98,11 @@ func (r Record) Validate() error {
 	return nil
 }
 
+// Export creates a standalone transfer for a record without named lists.
+// Use Catalog.Export when a record references catalog-owned lists.
 func (r Record) Export() Transfer {
 	return Transfer{Schema: TransferSchema, EngineCommit: EngineCommit, License: EngineLicense,
-		Assets: r.Definition.Assets, Strategy: r}
+		Assets: r.Definition.Assets, Blobs: r.Definition.BlobRefs(), Strategy: r}
 }
 
 func (t Transfer) Import() (Draft, error) {
@@ -103,21 +114,36 @@ func (t Transfer) Import() (Draft, error) {
 			return Draft{}, errors.New("strategy asset references do not match its definition")
 		}
 	}
-	if err := t.Strategy.Validate(); err != nil {
+	if len(t.Blobs) != 0 {
+		if refs := t.Strategy.Definition.BlobRefs(); len(refs) != 1 || len(t.Blobs) != 1 || t.Blobs[0] != refs[0] {
+			return Draft{}, errors.New("strategy blob does not match its pinned native action")
+		}
+	}
+	c := Catalog{Lists: t.Lists}
+	if err := c.validateLists(); err != nil {
 		return Draft{}, err
 	}
-	return Draft{ID: t.Strategy.Definition.ID, Name: t.Strategy.Name, Raw: &t.Strategy.Raw}, nil
+	if err := c.validateRecord(t.Strategy); err != nil {
+		return Draft{}, err
+	}
+	if len(t.Lists) != len(namedListIDs(t.Strategy.ListRefs)) {
+		return Draft{}, errors.New("transfer includes unused native lists")
+	}
+	return Draft{ID: t.Strategy.Definition.ID, Name: t.Strategy.Name, Raw: &t.Strategy.Raw, ListRefs: t.Strategy.ListRefs}, nil
 }
 
 func (c Catalog) Validate() error {
 	if c.Schema != CatalogSchema || c.Records == nil || len(c.Records) > CatalogLimit {
 		return errors.New("invalid Zapret catalog or too many strategies")
 	}
+	if err := c.validateLists(); err != nil {
+		return err
+	}
 	for id, record := range c.Records {
 		if id != record.Definition.ID {
 			return errors.New("invalid Zapret catalog strategy identity")
 		}
-		if err := record.Validate(); err != nil {
+		if err := c.validateRecord(record); err != nil {
 			return fmt.Errorf("strategy %q: %w", id, err)
 		}
 	}

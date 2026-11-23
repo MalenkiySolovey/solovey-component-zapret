@@ -19,17 +19,18 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 	}
 	value := fixture(t)
 	value.Profiles[0].Lists = &NativeLists{
-		HostList: []string{"example.test"}, HostListExclude: []string{"plain.example.test"},
-		IPSet: []string{"192.0.2.0/24", "2001:db8::/32"}, IPSetExclude: []string{"192.0.2.42"},
+		HostListExclude: []string{"plain.example.test"}, IPSet: []string{"192.0.2.0/24", "2001:db8::/32"},
 	}
 	value.Profiles = append(value.Profiles, Profile{ID: "udp-quic", Protocol: intent.PacketProtocolUDP, Ports: []uint16{8443},
 		Payload: QUICInitial, QUICRepeats: 1})
-	value, err := Seal(value)
+	cat := namedCatalog(t)
+	sealed, err := cat.SealDraft(Draft{ID: value.ID, Name: "engine argv", Profiles: value.Profiles,
+		ListRefs: ListRefs{value.Profiles[0].ID: {HostList: "names", IPSetExclude: "ips"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	argv, err := CompileBindings(root, 401, 0x40000000, []MarkedStrategy{
-		{Strategy: value, QueueMark: 0x120000}, {Strategy: value, QueueMark: 0x130000},
+		{Strategy: sealed.Definition, QueueMark: 0x120000}, {Strategy: sealed.Definition, QueueMark: 0x130000},
 	})
 	if err != nil {
 		t.Fatal(err)

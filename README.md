@@ -30,11 +30,19 @@ not operator-supplied Lua or paths. A consumer still needs installed broker
 and Network Planner admission for the requested packet scope. Native Circular
 requires return observation, which the installed outgoing-only profile rejects.
 
-Native host and IP include/exclude lists are stored inside a Strategy revision
-and included in its import/export. Use DNS names, IP addresses or CIDR prefixes;
-file references, custom Lua and custom blobs are not accepted. Profiles with
-lists only contribute to protected QUIC DNS coverage if an unconditional QUIC
-profile still covers any unmatched traffic and no passive profile can shadow it.
+Native host and IP include/exclude fields accept inline values or one named
+list of the same kind per field. The Strategy catalog stores the shared lists;
+bound definitions are re-sealed with the resolved values on list change. A
+referenced list cannot be deleted or silently replaced by an import. Transfer
+includes only referenced lists and identifies the pinned QUIC blob when used.
+The editor contribution uses the same catalog revision for list edits, preview
+and export; it requires the matching Product catalog API. Visual and native
+text edits preserve the references separately from the sealed list values.
+
+Use DNS names, IP addresses or CIDR prefixes; file references, custom Lua and
+custom blobs are not accepted. Profiles with lists do not by themselves cover
+protected QUIC DNS. An unconditional QUIC profile still has to cover unmatched
+traffic, and no passive profile can shadow it.
 
 ## Checks
 

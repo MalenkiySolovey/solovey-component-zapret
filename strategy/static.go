@@ -20,9 +20,12 @@ const Schema = "solovey.zapret-strategy/v1"
 type AssetRef string
 
 const (
-	Library AssetRef = "upstream:zapret-lib"
-	Actions AssetRef = "upstream:zapret-antidpi"
+	Library         AssetRef = "upstream:zapret-lib"
+	Actions         AssetRef = "upstream:zapret-antidpi"
+	DefaultQUICBlob AssetRef = "upstream:fake-default-quic"
 )
+
+const defaultQUICBlobName = "fake_default_quic"
 
 type Payload string
 
@@ -138,6 +141,17 @@ func (value Strategy) Verified() (Strategy, error) {
 		return Strategy{}, ErrInvalidStrategy
 	}
 	return sealed, nil
+}
+
+// BlobRefs reports the immutable data used by the native actions. The
+// compiler does not accept external blob paths or user-supplied payloads.
+func (value Strategy) BlobRefs() []AssetRef {
+	for _, p := range value.Profiles {
+		if p.QUICRepeats != 0 {
+			return []AssetRef{DefaultQUICBlob}
+		}
+	}
+	return nil
 }
 
 func (value Strategy) PacketScope() (Scope, error) {
@@ -286,7 +300,7 @@ func (p Profile) actionArgs() []string {
 	case p.SplitAt != 0:
 		lua = fmt.Sprintf("multisplit:pos=%d", p.SplitAt)
 	case p.QUICRepeats != 0:
-		lua = fmt.Sprintf("fake:blob=fake_default_quic:repeats=%d", p.QUICRepeats)
+		lua = fmt.Sprintf("fake:blob=%s:repeats=%d", defaultQUICBlobName, p.QUICRepeats)
 	default:
 		return nil
 	}
