@@ -3,6 +3,7 @@ export default { zapretCatalog: {
   edit: 'Edit strategy', clone: 'Clone strategy', delete: 'Delete strategy', empty: 'No managed strategies',
   unavailable: 'The Zapret component is not ready.', references: 'Referenced by', bindings: 'Direct bindings', direct: 'Direct',
   strategy: 'Desired strategy', status: 'Applied status', diagnostic: 'Test HTTPS through this Direct',
+  observedProfiles: 'Observed native profiles', noObservedProfiles: 'No native profile observed yet',
   states: { off: 'Off', applied: 'Applied', pending: 'Desired differs from applied', blocked: 'Blocked: no verified live path' },
   name: 'Name', tlsPreset: 'TLS/TCP preset', httpPreset: 'HTTP/TCP preset', quicPreset: 'QUIC/UDP preset', visual: 'Profiles', raw: 'Native options',
   profile: 'Profile {index}', profileID: 'Profile ID', protocol: 'Protocol', family: 'IP family', availableFamilies: 'Available families',

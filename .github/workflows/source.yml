@@ -60,3 +60,15 @@ jobs:
               ip link set lo up
               exec "$1" -test.run "^TestPinnedEngineQueueOverloadDrops$" -test.v -test.timeout=30s
             ' _ "$RUNNER_TEMP/zapret-queue-test"
+      - name: Observe native matches without payload logging in a disposable namespace
+        run: |
+          test "$GITHUB_ACTIONS" = true
+          commit=$(node -p "require('./upstream/zapret2.json').commit")
+          curl --fail --silent --show-error --max-time 20 --max-filesize 1200 --proto '=https' \
+            "https://raw.githubusercontent.com/bol-van/zapret2/$commit/files/fake/quic_initial_www_google_com.bin" \
+            -o "$RUNNER_TEMP/quic-initial.bin"
+          sudo unshare --net -- env SOLOVEY_TEST_PARENT_NETNS="$(readlink /proc/self/ns/net)" \
+            SOLOVEY_TEST_ENGINE_ROOT="$RUNNER_TEMP/nfqws2-a" SOLOVEY_TEST_QUIC_INITIAL="$RUNNER_TEMP/quic-initial.bin" bash -euc '
+              ip link set lo up
+              exec "$1" -test.run "^TestPinnedEngineReportsMatchedNativeProfiles$" -test.v -test.timeout=30s
+            ' _ "$RUNNER_TEMP/zapret-queue-test"
