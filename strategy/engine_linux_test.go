@@ -24,6 +24,8 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 	value.Profiles = append(value.Profiles, Profile{ID: "udp-quic", Protocol: intent.PacketProtocolUDP, Ports: []uint16{8443},
 		Payload: QUICInitial, QUICRepeats: 1})
 	cat := namedCatalog(t)
+	cat.BlobAssets = map[string]string{"fixture": "40534f4c4f564559"}
+	value.Profiles[len(value.Profiles)-1].QUICBlobRef = "fixture"
 	sealed, err := cat.SealDraft(Draft{ID: value.ID, Name: "engine argv", Profiles: value.Profiles,
 		ListRefs: ListRefs{value.Profiles[0].ID: {HostList: "names", IPSetExclude: "ips"}}})
 	if err != nil {

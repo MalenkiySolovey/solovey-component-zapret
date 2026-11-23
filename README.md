@@ -25,8 +25,8 @@ The upstream engine is an external, checksum-verified build input recorded in
 `upstream/zapret2.json`. It is not a fork and is not downloaded at runtime.
 
 Static profiles support explicit TCP or UDP ports and optional IP-family
-filters. The bounded QUIC Initial action uses the upstream built-in blob,
-not operator-supplied Lua or paths. A consumer still needs installed broker
+filters. The bounded QUIC Initial action defaults to the upstream built-in
+blob. A consumer still needs installed broker
 and Network Planner admission for the requested packet scope. Native Circular
 requires return observation, which the installed outgoing-only profile rejects.
 
@@ -39,10 +39,17 @@ The editor contribution uses the same catalog revision for list edits, preview
 and export; it requires the matching Product catalog API. Visual and native
 text edits preserve the references separately from the sealed list values.
 
-Use DNS names, IP addresses or CIDR prefixes; file references, custom Lua and
-custom blobs are not accepted. Profiles with lists do not by themselves cover
-protected QUIC DNS. An unconditional QUIC profile still has to cover unmatched
-traffic, and no passive profile can shadow it.
+Use DNS names, IP addresses or CIDR prefixes for lists. The same catalog can
+store up to eight named QUIC decoys as hexadecimal bytes. Select one in a QUIC
+Initial profile or reference it in native editor text as
+`--lua-desync=fake:blob=asset_<id>:repeats=1`. A Strategy has a total custom
+blob budget of 1200 bytes. References are revision-bound and transfer with
+their data; raw options never read a file or name a runtime Lua variable.
+Custom Lua and file references are not admitted. Treat blobs as public wire
+data, not secrets. Custom blobs need explicit installed host approval and do
+not satisfy protected QUIC DNS coverage. An unconditional built-in QUIC
+profile still has to cover unmatched traffic; a passive or custom profile
+cannot shadow it.
 
 ## Checks
 

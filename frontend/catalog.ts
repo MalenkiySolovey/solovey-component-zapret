@@ -14,6 +14,7 @@ export interface Profile {
   payload?: 'tls_client_hello' | 'http_req' | 'quic_initial'
   splitAt?: number
   quicRepeats?: number
+  quicBlobRef?: string
   lists?: Partial<Record<NativeListField, string[]>>
 }
 export interface StrategyRecord {
@@ -32,7 +33,7 @@ export interface StrategyReference {
   queue?: number
 }
 export interface CatalogView {
-  catalog: { records: Record<string, StrategyRecord>; lists?: Record<string, NamedList> }
+  catalog: { records: Record<string, StrategyRecord>; lists?: Record<string, NamedList>; blobAssets?: Record<string, string> }
   revision: string
   ready: boolean
   references: StrategyReference[]
