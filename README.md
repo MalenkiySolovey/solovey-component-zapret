@@ -24,6 +24,18 @@ disabled/absent component.
 The upstream engine is an external, checksum-verified build input recorded in
 `upstream/zapret2.json`. It is not a fork and is not downloaded at runtime.
 
+Static profiles support explicit TCP or UDP ports and optional IP-family
+filters. The bounded QUIC Initial action uses the upstream built-in blob,
+not operator-supplied Lua or paths. A consumer still needs installed broker
+and Network Planner admission for the requested packet scope. Native Circular
+requires return observation, which the installed outgoing-only profile rejects.
+
+Native host and IP include/exclude lists are stored inside a Strategy revision
+and included in its import/export. Use DNS names, IP addresses or CIDR prefixes;
+file references, custom Lua and custom blobs are not accepted. Profiles with
+lists only contribute to protected QUIC DNS coverage if an unconditional QUIC
+profile still covers any unmatched traffic and no passive profile can shadow it.
+
 ## Checks
 
 Run with Go 1.26.10 or newer and `GOWORK=off`:

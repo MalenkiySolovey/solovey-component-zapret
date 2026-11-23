@@ -18,7 +18,12 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 		t.Skip("requires independently built nfqws2 engine input")
 	}
 	value := fixture(t)
-	value.Profiles = append(value.Profiles, Profile{ID: "udp-pass", Protocol: intent.PacketProtocolUDP, Ports: []uint16{8443}})
+	value.Profiles[0].Lists = &NativeLists{
+		HostList: []string{"example.test"}, HostListExclude: []string{"plain.example.test"},
+		IPSet: []string{"192.0.2.0/24", "2001:db8::/32"}, IPSetExclude: []string{"192.0.2.42"},
+	}
+	value.Profiles = append(value.Profiles, Profile{ID: "udp-quic", Protocol: intent.PacketProtocolUDP, Ports: []uint16{8443},
+		Payload: QUICInitial, QUICRepeats: 1})
 	value, err := Seal(value)
 	if err != nil {
 		t.Fatal(err)
