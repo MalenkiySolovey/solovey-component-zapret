@@ -69,12 +69,7 @@ func (c Catalog) SealDraft(d Draft) (Record, error) {
 		}
 		raw = *d.Raw
 	} else {
-		compiled := Strategy{Schema: Schema, ID: d.ID, Profiles: d.Profiles}
-		for _, p := range d.Profiles {
-			if p.hasAction() {
-				compiled.Assets = []AssetRef{Library, Actions}
-			}
-		}
+		compiled := Strategy{Schema: Schema, ID: d.ID, Profiles: d.Profiles, Assets: nativeAssets(d.Profiles)}
 		compiled, err := c.resolveBlobs(compiled)
 		if err != nil {
 			return Record{}, err

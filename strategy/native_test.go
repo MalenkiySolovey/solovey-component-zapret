@@ -55,10 +55,71 @@ func TestListRestrictedQUICDoesNotPromiseDNSCoverage(t *testing.T) {
 	}
 }
 
-func TestNativeCircularReportsUnavailableReturnObservation(t *testing.T) {
-	_, err := ParseNative("fixture", "--filter-tcp=443 --lua-desync=circular:fails=4")
-	if !errors.Is(err, errReturnObservationUnavailable) {
-		t.Fatalf("want a return-observation rejection, got %v", err)
+const circularFixture = "\t--name=rotate --filter-tcp=443 --filter-l3=ipv6\r\n" +
+	"--filter-l7=tls --in-range=-n32 --lua-desync=circular:fails=2\n" +
+	"--in-range=x --payload=tls_client_hello\r\n" +
+	"--lua-desync=multisplit:pos=17:strategy=1\n--lua-desync=multisplit:pos=9:strategy=2\n" +
+	"--lua-desync=multisplit:pos=11:strategy=3\n--lua-desync=multisplit:pos=13:strategy=4\n" +
+	"--lua-desync=multisplit:pos=19:strategy=5\n--new=passive --filter-tcp=853\n"
+
+func TestNativeCircularRoundTripAndReturnScope(t *testing.T) {
+	raw := circularFixture
+	record, err := SealDraft(Draft{ID: "fixture", Name: "Circular", Raw: &raw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := record.Definition
+	if record.Raw != circularFixture || !value.NeedsReturn ||
+		!slices.Equal(value.Assets, []AssetRef{Library, Actions, Automation}) ||
+		!slices.Equal(value.Profiles[0].Circular.Splits, []uint16{17, 9, 11, 13, 19}) {
+		t.Fatalf("lost native Circular ordering or asset identity: %+v", value)
+	}
+	imported, err := record.Export().Import()
+	if err != nil || imported.Raw == nil || *imported.Raw != circularFixture {
+		t.Fatalf("native transfer lost the original source: %v", err)
+	}
+	draft, err := SealDraft(Draft{ID: "fixture", Name: "Circular", Profiles: value.Profiles})
+	if err != nil || draft.Definition.Revision != value.Revision {
+		t.Fatalf("visual representation changed the runtime definition: %v", err)
+	}
+	v4, err := value.PacketScopeForFamily(IPv4)
+	if err != nil || v4.NeedsReturn || len(v4.ReturnTCP) != 0 || !slices.Equal(v4.TCP, []uint16{853}) {
+		t.Fatalf("unselected family acquired return scope: %+v, %v", v4, err)
+	}
+	v6, err := value.PacketScopeForFamily(IPv6)
+	if err != nil || !v6.NeedsReturn || !slices.Equal(v6.ReturnTCP, []uint16{443}) || !slices.Equal(v6.TCP, []uint16{443, 853}) {
+		t.Fatalf("return scope does not distinguish the Circular port: %+v, %v", v6, err)
+	}
+	if _, err := value.Compile("/opt/zapret2", 401, 0x120000, 0x40000000); !errors.Is(err, errReturnObservationUnavailable) {
+		t.Fatalf("an ordinary backend accepted an unadmitted return path: %v", err)
+	}
+	arg, trace, err := CompileBindingsForReturnPath("/opt/zapret2", 401, 0x40000000, []MarkedStrategy{{Strategy: value, QueueMark: 0x120000}}, false)
+	if err != nil || trace != nil {
+		t.Fatalf("compile Circular: %v", err)
+	}
+	want := []string{"--in-range=-n32", "--lua-desync=circular:fails=2:key=solovey_1/1:hostkey=solovey_circular_hostkey",
+		"--in-range=x", "--payload=tls_client_hello", "--lua-desync=multisplit:pos=17:strategy=1", "--lua-desync=multisplit:pos=9:strategy=2"}
+	start := slices.Index(arg, want[0])
+	if start < 0 || len(arg) < start+len(want) || !slices.Equal(arg[start:start+len(want)], want) ||
+		!slices.Contains(arg, "--lua-init=@/opt/zapret2/lua/zapret-auto.lua") {
+		t.Fatalf("engine lost the action-local range or pinned asset: %v", arg)
+	}
+}
+
+func TestNativeCircularRejectsLostOrUnboundedReturnSemantics(t *testing.T) {
+	for _, raw := range []string{
+		strings.Replace(circularFixture, "--in-range=-n32 ", "", 1),
+		strings.Replace(circularFixture, "--in-range=-n32", "--in-range=-n64", 1),
+		strings.Replace(circularFixture, "--in-range=x ", "", 1),
+		strings.Replace(circularFixture, "--in-range=x --payload=tls_client_hello", "--payload=tls_client_hello --in-range=x", 1),
+		strings.Replace(circularFixture, "--in-range=x --payload=tls_client_hello", "--in-range=x --payload=tls_client_hello --in-range=-n32", 1),
+		strings.Replace(circularFixture, "circular:fails=2", "circular:fails=2:hostkey=untrusted", 1),
+		strings.Replace(circularFixture, "pos=9:strategy=2", "pos=9:strategy=3", 1),
+		circularFixture + " --lua-init=@/tmp/untrusted.lua",
+	} {
+		if _, err := ParseNative("fixture", raw); !errors.Is(err, ErrInvalidStrategy) {
+			t.Fatalf("accepted altered Circular semantics %q: %v", raw, err)
+		}
 	}
 }
 

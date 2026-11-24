@@ -8,6 +8,7 @@ export default { zapretCatalog: {
   name: 'Имя', tlsPreset: 'Шаблон TLS/TCP', httpPreset: 'Шаблон HTTP/TCP', quicPreset: 'Шаблон QUIC/UDP', visual: 'Профили', raw: 'Параметры nfqws2',
   profile: 'Профиль {index}', profileID: 'ID профиля', protocol: 'Протокол', family: 'Семейство IP', availableFamilies: 'Доступные семейства',
   ports: 'Порты через запятую', payload: 'Тип данных', split: 'Байт разделения', quicRepeats: 'Копии QUIC',
+  tcpAction: 'Действие TCP', circularFailures: 'Сбои до переключения', circularSplits: 'Байты разделения (по порядку)',
   passive: 'Без преобразования', moveUp: 'Поднять профиль', moveDown: 'Опустить профиль', removeProfile: 'Удалить профиль', addProfile: 'Добавить профиль',
   nativeLists: 'Фильтры движка', hostList: 'Включить домены', hostListExclude: 'Исключить домены',
   ipSet: 'Включить IP-адреса или подсети', ipSetExclude: 'Исключить IP-адреса или подсети',

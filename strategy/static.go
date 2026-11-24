@@ -23,12 +23,16 @@ type AssetRef string
 const (
 	Library         AssetRef = "upstream:zapret-lib"
 	Actions         AssetRef = "upstream:zapret-antidpi"
+	Automation      AssetRef = "upstream:zapret-auto"
 	DefaultQUICBlob AssetRef = "upstream:fake-default-quic"
 )
 
 const defaultQUICBlobName = "fake_default_quic"
 
-const maxProfiles = 16
+const (
+	maxProfiles      = 16
+	maxSplitPosition = 128
+)
 
 type Payload string
 
@@ -57,6 +61,7 @@ type Profile struct {
 	QUICBlobRef string                `json:"quicBlobRef,omitempty"`
 	Family      AddressFamily         `json:"family,omitempty"` // Empty matches either admitted family.
 	Lists       *NativeLists          `json:"lists,omitempty"`
+	Circular    *Circular             `json:"circular,omitempty"`
 }
 
 type Strategy struct {
@@ -71,6 +76,7 @@ type Strategy struct {
 
 type Scope struct {
 	TCP, UDP    []uint16
+	ReturnTCP   []uint16
 	NeedsReturn bool
 }
 
@@ -81,8 +87,7 @@ var errReturnObservationUnavailable = errors.New("Zapret return-path observation
 // Seal validates and returns a new content-revisioned Strategy. It copies
 // caller-owned slices and normalizes sets without reordering profiles or Lua.
 func Seal(value Strategy) (Strategy, error) {
-	if value.Schema != Schema || !outbounds.ValidZapretStrategyRef(value.ID) || len(value.Profiles) == 0 || len(value.Profiles) > maxProfiles ||
-		(len(value.Assets) != 0 && !slices.Equal(value.Assets, []AssetRef{Library, Actions})) {
+	if value.Schema != Schema || !outbounds.ValidZapretStrategyRef(value.ID) || len(value.Profiles) == 0 || len(value.Profiles) > maxProfiles || len(value.Assets) > 3 {
 		return Strategy{}, ErrInvalidStrategy
 	}
 	value.Assets = slices.Clone(value.Assets)
@@ -90,6 +95,7 @@ func Seal(value Strategy) (Strategy, error) {
 	value.BlobData = maps.Clone(value.BlobData)
 	seen := map[string]bool{}
 	listBytes := maxNativeListBytes
+	needsReturn := false
 	for i, profile := range value.Profiles {
 		if !outbounds.ValidZapretStrategyRef(profile.ID) || seen[profile.ID] || len(profile.Ports) == 0 || len(profile.Ports) > 32 ||
 			(profile.Protocol != intent.PacketProtocolTCP && profile.Protocol != intent.PacketProtocolUDP) {
@@ -101,8 +107,7 @@ func Seal(value Strategy) (Strategy, error) {
 		if profile.Ports[0] == 0 || len(slices.Compact(slices.Clone(profile.Ports))) != len(profile.Ports) {
 			return Strategy{}, ErrInvalidStrategy
 		}
-		if profile.Family != "" && profile.Family != IPv4 && profile.Family != IPv6 ||
-			!profile.validAction() || profile.hasAction() && len(value.Assets) != 2 {
+		if profile.Family != "" && profile.Family != IPv4 && profile.Family != IPv6 || !profile.validAction() {
 			return Strategy{}, ErrInvalidStrategy
 		}
 		if profile.Lists != nil {
@@ -112,8 +117,23 @@ func Seal(value Strategy) (Strategy, error) {
 			}
 			profile.Lists = lists
 		}
+		if profile.Circular != nil {
+			cfg := *profile.Circular
+			cfg.Splits = slices.Clone(cfg.Splits)
+			profile.Circular = &cfg
+			needsReturn = true
+		}
 		value.Profiles[i] = profile
 	}
+	wantAssets := nativeAssets(value.Profiles)
+	// Older sealed passive profiles could carry the two unused base assets.
+	if !slices.Equal(value.Assets, wantAssets) && !(len(wantAssets) == 0 && slices.Equal(value.Assets, []AssetRef{Library, Actions})) {
+		return Strategy{}, ErrInvalidStrategy
+	}
+	if value.NeedsReturn && !needsReturn {
+		return Strategy{}, errReturnObservationUnavailable
+	}
+	value.NeedsReturn = needsReturn
 	if err := value.validateBlobs(); err != nil {
 		return Strategy{}, err
 	}
@@ -133,15 +153,32 @@ func Seal(value Strategy) (Strategy, error) {
 	return value, nil
 }
 
-func (p Profile) hasAction() bool { return p.SplitAt != 0 || p.QUICRepeats != 0 }
+func (p Profile) hasAction() bool { return p.SplitAt != 0 || p.QUICRepeats != 0 || p.Circular != nil }
+
+func nativeAssets(profiles []Profile) []AssetRef {
+	var actions bool
+	for _, p := range profiles {
+		if p.Circular != nil {
+			return []AssetRef{Library, Actions, Automation}
+		}
+		actions = actions || p.hasAction()
+	}
+	if actions {
+		return []AssetRef{Library, Actions}
+	}
+	return nil
+}
 
 func (p Profile) validAction() bool {
 	if p.QUICBlobRef != "" && (p.QUICRepeats == 0 || !outbounds.ValidZapretStrategyRef(p.QUICBlobRef)) {
 		return false
 	}
 	switch {
+	case p.Circular != nil:
+		return p.Protocol == intent.PacketProtocolTCP && p.SplitAt == 0 && p.QUICRepeats == 0 &&
+			(p.Payload == TLSClientHello || p.Payload == HTTPRequest) && p.Circular.valid()
 	case p.SplitAt != 0:
-		return p.Protocol == intent.PacketProtocolTCP && p.SplitAt <= 128 && p.QUICRepeats == 0 &&
+		return p.Protocol == intent.PacketProtocolTCP && p.SplitAt <= maxSplitPosition && p.QUICRepeats == 0 &&
 			(p.Payload == TLSClientHello || p.Payload == HTTPRequest)
 	case p.QUICRepeats != 0:
 		return p.Protocol == intent.PacketProtocolUDP && p.QUICRepeats <= 4 && p.Payload == QUICInitial
@@ -186,13 +223,16 @@ func (value Strategy) PacketScopeForFamily(family AddressFamily) (Scope, error) 
 }
 
 func (value Strategy) scope(family AddressFamily) Scope {
-	result := Scope{NeedsReturn: value.NeedsReturn}
+	var result Scope
 	for _, profile := range value.Profiles {
 		if family != "" && profile.Family != "" && profile.Family != family {
 			continue
 		}
 		if profile.Protocol == intent.PacketProtocolTCP {
 			result.TCP = append(result.TCP, profile.Ports...)
+			if profile.Circular != nil {
+				result.ReturnTCP = append(result.ReturnTCP, profile.Ports...)
+			}
 		} else {
 			result.UDP = append(result.UDP, profile.Ports...)
 		}
@@ -201,6 +241,9 @@ func (value Strategy) scope(family AddressFamily) Scope {
 	slices.Sort(result.UDP)
 	result.TCP = slices.Compact(result.TCP)
 	result.UDP = slices.Compact(result.UDP)
+	slices.Sort(result.ReturnTCP)
+	result.ReturnTCP = slices.Compact(result.ReturnTCP)
+	result.NeedsReturn = len(result.ReturnTCP) != 0
 	return result
 }
 
@@ -236,17 +279,23 @@ type MarkedStrategy struct {
 // CompileBindings compiles one listener into disjoint native profile groups.
 // Global Lua setup is performed once; each profile filters its group's mark.
 func CompileBindings(engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy) ([]string, error) {
-	args, _, err := compileBindings(engineRoot, queue, loopMark, bindings, false)
+	args, _, err := compileBindings(engineRoot, queue, loopMark, bindings, false, false)
 	return args, err
 }
 
 // CompileBindingsWithNativeTrace emits one best-effort observation per matched
 // native profile. Connect the fresh trace to this engine's private stdout only.
 func CompileBindingsWithNativeTrace(engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy) ([]string, *NativeTrace, error) {
-	return compileBindings(engineRoot, queue, loopMark, bindings, true)
+	return compileBindings(engineRoot, queue, loopMark, bindings, true, false)
 }
 
-func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy, trace bool) ([]string, *NativeTrace, error) {
+// CompileBindingsForReturnPath is for a backend that has admitted every
+// binding's exact return scope. Ordinary callers must use CompileBindings.
+func CompileBindingsForReturnPath(engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy, trace bool) ([]string, *NativeTrace, error) {
+	return compileBindings(engineRoot, queue, loopMark, bindings, trace, true)
+}
+
+func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy, trace, returnPath bool) ([]string, *NativeTrace, error) {
 	if queue == 0 || loopMark == 0 || loopMark&(loopMark-1) != 0 || len(bindings) == 0 ||
 		!path.IsAbs(engineRoot) || path.Clean(engineRoot) != engineRoot || len(engineRoot) > 512 || strings.ContainsAny(engineRoot, "\x00\r\n") {
 		return nil, nil, errors.New("invalid Zapret engine root or Network Planner allocation")
@@ -256,7 +305,7 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 	}
 	verified := make([]Strategy, len(bindings))
 	seen := make(map[uint32]bool, len(bindings))
-	needsLua := false
+	needsLua, needsCircular := false, false
 	minimum := 0
 	for i, item := range bindings {
 		if item.QueueMark == 0 || item.QueueMark&loopMark != 0 || seen[item.QueueMark] {
@@ -267,13 +316,14 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 		if err != nil {
 			return nil, nil, err
 		}
-		if sealed.NeedsReturn {
+		if sealed.NeedsReturn && !returnPath {
 			return nil, nil, errReturnObservationUnavailable
 		}
 		minimum += len(sealed.Profiles) * minimumEngineProfileBytes
 		if minimum > engineArgumentBudget {
 			return nil, nil, argumentBudgetError(minimum)
 		}
+		needsCircular = needsCircular || sealed.NeedsReturn
 		verified[i] = sealed
 		needsLua = needsLua || len(sealed.Assets) != 0
 	}
@@ -281,6 +331,9 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 	if needsLua {
 		args = append(args, "--lua-init=@"+path.Join(engineRoot, "lua/zapret-lib.lua"),
 			"--lua-init=@"+path.Join(engineRoot, "lua/zapret-antidpi.lua"))
+	}
+	if needsCircular {
+		args = append(args, "--lua-init=@"+path.Join(engineRoot, "lua/zapret-auto.lua"), "--lua-init="+circularHostKeyLua)
 	}
 	if trace {
 		args = append(args, "--lua-init="+nativeTraceLua)
@@ -340,6 +393,10 @@ func appendProfiles(args []string, value Strategy, mark uint32, binding int, gro
 			args = append(args, "--filter-l3="+string(profile.Family))
 		}
 		args = profile.Lists.appendArgs(args)
+		if profile.Circular != nil {
+			args = append(args, profile.circularArgs(fmt.Sprintf("%d/%d", binding+1, i+1), trace)...)
+			continue
+		}
 		args = append(args, profile.actionArgs(names[value.BlobData[profile.QUICBlobRef]])...)
 		if trace {
 			args = append(args, fmt.Sprintf("--lua-desync=solovey_profile_match:slot=%d/%d", binding+1, i+1))

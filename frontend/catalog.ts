@@ -13,6 +13,7 @@ export interface Profile {
   ports: number[]
   payload?: 'tls_client_hello' | 'http_req' | 'quic_initial'
   splitAt?: number
+  circular?: { failures: number; splits: number[] }
   quicRepeats?: number
   quicBlobRef?: string
   lists?: Partial<Record<NativeListField, string[]>>

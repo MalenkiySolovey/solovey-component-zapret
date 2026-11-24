@@ -26,7 +26,7 @@ mkdir -- "$out"
 mkdir -- "$out/lua"
 install -m 0755 "$scratch/source/nfq2/nfqws2" "$out/nfqws2"
 install -m 0644 "$scratch/source/docs/LICENSE.txt" "$out/LICENSE.upstream"
-install -m 0644 "$scratch/source/lua/"{zapret-lib,zapret-antidpi}.lua "$out/lua/"
+install -m 0644 "$scratch/source/lua/"{zapret-lib,zapret-antidpi,zapret-auto}.lua "$out/lua/"
 install -m 0644 "$root/upstream/zapret2.json" "$out/source.json"
 install -m 0644 "$root/packaging/nfqueue-policy.c" "$out/nfqueue-policy.c"
 (
