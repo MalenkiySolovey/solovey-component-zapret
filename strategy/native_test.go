@@ -2,10 +2,72 @@ package strategy
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 )
+
+func rangedProfileFixture() string {
+	raw := "  --name=ranged --filter-tcp=8000-8039,65534-65535\r\n"
+	for i := range 17 {
+		raw += fmt.Sprintf("--new=extra-%d --filter-tcp=%d\n", i, 8000+i)
+	}
+	return raw
+}
+
+func TestNativeRangesPreserveSourceProfileOrderAndExactPorts(t *testing.T) {
+	raw := rangedProfileFixture()
+	record, err := SealDraft(Draft{ID: "fixture", Name: "Ranged profiles", Raw: &raw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := record.Definition
+	if len(value.Profiles) != 18 || value.Profiles[0].ID != "ranged" || value.Profiles[17].ID != "extra-16" {
+		t.Fatal("native profile order changed")
+	}
+	scope, err := value.PacketScope()
+	if err != nil || len(scope.TCP) != 42 || scope.TCP[0] != 8000 || scope.TCP[39] != 8039 || scope.TCP[41] != 65535 || len(scope.UDP) != 0 {
+		t.Fatalf("wrong exact Host port scope: %+v, %v", scope, err)
+	}
+	transfer, err := record.Export().Import()
+	if err != nil || transfer.Raw == nil || *transfer.Raw != raw {
+		t.Fatalf("export did not preserve the original source: %v", err)
+	}
+	visual, err := SealDraft(Draft{ID: "fixture", Name: record.Name, Profiles: value.Profiles})
+	if err != nil || visual.Definition.Revision != value.Revision {
+		t.Fatalf("visual save changed the ordered native definition: %v", err)
+	}
+	argv, err := value.Compile("/usr/local/lib/zapret", 401, 0x120000, 0x40000000)
+	if err != nil || !slices.Contains(argv, "--filter-tcp=8000-8039,65534-65535") {
+		t.Fatalf("engine did not receive the bounded range: %v, %v", argv, err)
+	}
+}
+
+func TestNativeRangesRejectUnboundedInvalidAndCombinedOverflow(t *testing.T) {
+	for _, input := range []string{"*", "~443", "0-2", "443-42", "65535-65536", "443-444-445", "443,", "440-443,443"} {
+		if _, err := ParseNative("fixture", "--filter-tcp="+input); !errors.Is(err, ErrInvalidStrategy) {
+			t.Errorf("accepted invalid or ambiguous port filter %q: %v", input, err)
+		}
+	}
+	const full = "--filter-udp=100-163"
+	if _, err := ParseNative("fixture", full); err != nil {
+		t.Fatal(err)
+	}
+	for _, input := range []string{"--filter-udp=100-164", full + " --new --filter-udp=164"} {
+		if _, err := ParseNative("fixture", input); err == nil || !strings.Contains(err.Error(), "Host admits at most 64") {
+			t.Errorf("port budget diagnostic missing for %q: %v", input, err)
+		}
+	}
+}
+
+func TestNativeRawNeverAdmitsCustomLua(t *testing.T) {
+	const raw = "--filter-tcp=443 --lua-init=@/private/path.lua"
+	_, err := ParseNative("fixture", raw)
+	if !errors.Is(err, ErrInvalidStrategy) || !errors.Is(err, ErrUnsupportedCustomLua) || strings.Contains(err.Error(), "/private/") {
+		t.Fatalf("custom code did not return a safe trust-boundary diagnostic: %v", err)
+	}
+}
 
 func TestNativeListsRoundTrip(t *testing.T) {
 	raw := "--filter-tcp=443 --hostlist-domains=b.test,A.test,a.test --hostlist-exclude-domains=plain.a.test " +

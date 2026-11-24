@@ -11,10 +11,9 @@ import (
 )
 
 const (
-	NamedBlobLimit         = 8
-	MaxNativeBlobBytes     = 1200 // Total distinct custom blob bytes per Strategy.
-	maxBlobDefinitionBytes = 8 << 10
-	nativeBlobRefPrefix    = "asset_" // Editor reference, never a runtime Lua variable.
+	NamedBlobLimit      = 8
+	MaxNativeBlobBytes  = 1200     // Total distinct custom blob bytes per Strategy.
+	nativeBlobRefPrefix = "asset_" // Editor reference, never a runtime Lua variable.
 )
 
 func normalizeBlob(data string) (string, error) {
@@ -117,6 +116,9 @@ func (c Catalog) WithNamedBlob(id string, data *string) (Catalog, error) {
 			return Catalog{}, fmt.Errorf("native blob %q is used by strategy %q: %w", id, ref, err)
 		}
 		c.Records[ref] = next
+	}
+	if err := c.checkSize(); err != nil {
+		return Catalog{}, err
 	}
 	return c, nil
 }

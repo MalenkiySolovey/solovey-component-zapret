@@ -121,7 +121,7 @@ func TestNativeBlobRejectsUnsafeInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded, err := json.Marshal(r.Definition)
-	if err != nil || len(encoded) > maxBlobDefinitionBytes {
+	if err != nil || len(encoded) > MaxDefinitionBytes {
 		t.Fatalf("maximum blob does not fit installed broker limit: length=%d err=%v", len(encoded), err)
 	}
 }

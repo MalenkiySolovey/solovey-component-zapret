@@ -9,7 +9,6 @@ import (
 	"maps"
 	"path"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/MalenkiySolovey/solovey-host/network/intent"
@@ -17,6 +16,10 @@ import (
 )
 
 const Schema = "solovey.zapret-strategy/v1"
+
+// MaxDefinitionBytes is the installed activation envelope's per-definition
+// limit, independent of the catalog, native input, and engine argv budgets.
+const MaxDefinitionBytes = 8 << 10
 
 type AssetRef string
 
@@ -30,7 +33,8 @@ const (
 const defaultQUICBlobName = "fake_default_quic"
 
 const (
-	maxProfiles      = 16
+	// The Host intent carries an explicit positive port set per protocol.
+	maxAdmittedPorts = 64
 	maxSplitPosition = 128
 )
 
@@ -87,8 +91,11 @@ var errReturnObservationUnavailable = errors.New("Zapret return-path observation
 // Seal validates and returns a new content-revisioned Strategy. It copies
 // caller-owned slices and normalizes sets without reordering profiles or Lua.
 func Seal(value Strategy) (Strategy, error) {
-	if value.Schema != Schema || !outbounds.ValidZapretStrategyRef(value.ID) || len(value.Profiles) == 0 || len(value.Profiles) > maxProfiles || len(value.Assets) > 3 {
+	if value.Schema != Schema || !outbounds.ValidZapretStrategyRef(value.ID) || len(value.Profiles) == 0 || len(value.Assets) > 3 {
 		return Strategy{}, ErrInvalidStrategy
+	}
+	if len(value.Profiles) > MaxNativeBytes/minimumNativeProfileBytes {
+		return Strategy{}, nativeTextBudgetError(len(value.Profiles) * minimumNativeProfileBytes)
 	}
 	value.Assets = slices.Clone(value.Assets)
 	value.Profiles = slices.Clone(value.Profiles)
@@ -97,9 +104,12 @@ func Seal(value Strategy) (Strategy, error) {
 	listBytes := maxNativeListBytes
 	needsReturn := false
 	for i, profile := range value.Profiles {
-		if !outbounds.ValidZapretStrategyRef(profile.ID) || seen[profile.ID] || len(profile.Ports) == 0 || len(profile.Ports) > 32 ||
+		if !outbounds.ValidZapretStrategyRef(profile.ID) || seen[profile.ID] || len(profile.Ports) == 0 ||
 			(profile.Protocol != intent.PacketProtocolTCP && profile.Protocol != intent.PacketProtocolUDP) {
 			return Strategy{}, ErrInvalidStrategy
+		}
+		if len(profile.Ports) > maxAdmittedPorts {
+			return Strategy{}, portScopeBudgetError(profile.Protocol, len(profile.Ports))
 		}
 		seen[profile.ID] = true
 		profile.Ports = slices.Clone(profile.Ports)
@@ -139,15 +149,18 @@ func Seal(value Strategy) (Strategy, error) {
 		return Strategy{}, err
 	}
 	scope := value.scope("")
-	if len(scope.TCP) > 64 || len(scope.UDP) > 64 {
-		return Strategy{}, ErrInvalidStrategy
+	if len(scope.TCP) > maxAdmittedPorts {
+		return Strategy{}, portScopeBudgetError(intent.PacketProtocolTCP, len(scope.TCP))
+	}
+	if len(scope.UDP) > maxAdmittedPorts {
+		return Strategy{}, portScopeBudgetError(intent.PacketProtocolUDP, len(scope.UDP))
 	}
 	value.Revision = ""
 	data, err := json.Marshal(value)
 	if err != nil {
 		return Strategy{}, ErrInvalidStrategy
 	}
-	if len(value.BlobData) != 0 && len(data)+64 > maxBlobDefinitionBytes {
+	if len(value.BlobData) != 0 && len(data)+64 > MaxDefinitionBytes {
 		return Strategy{}, fmt.Errorf("%w: native blob strategy exceeds the runtime definition budget", ErrInvalidStrategy)
 	}
 	value.Revision = fmt.Sprintf("%x", sha256.Sum256(data))
@@ -389,12 +402,8 @@ func appendProfiles(args []string, value Strategy, mark uint32, binding int, gro
 		} else if groupNames {
 			args = append(args, "--name="+name)
 		}
-		ports := make([]string, 0, len(profile.Ports))
-		for _, port := range profile.Ports {
-			ports = append(ports, strconv.Itoa(int(port)))
-		}
 		args = append(args, fmt.Sprintf("--filter-mark=0x%x/0xffffffff", mark),
-			"--filter-"+string(profile.Protocol)+"="+strings.Join(ports, ","))
+			"--filter-"+string(profile.Protocol)+"="+nativePortList(profile.Ports))
 		if profile.Family != "" {
 			args = append(args, "--filter-l3="+string(profile.Family))
 		}
