@@ -46,9 +46,20 @@ func TestPinnedEngineReportsMatchedNativeProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	withRange := func(filter string) Strategy {
+		draft := profile
+		draft.Profiles = slices.Clone(profile.Profiles)
+		draft.Profiles[0].OutRange = filter
+		value, err := Seal(draft)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
 	const queue, loop = 322, 0x40000000
 	args, trace, err := CompileBindingsWithNativeTrace(root, queue, loop, []MarkedStrategy{
-		{Strategy: profile, QueueMark: 0x120000}, {Strategy: profile, QueueMark: 0x130000},
+		{Strategy: withRange("d2-"), QueueMark: 0x120000}, {Strategy: profile, QueueMark: 0x130000},
+		{Strategy: withRange("x"), QueueMark: 0x140000},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +80,14 @@ add rule inet zapret_trace_fixture output oifname "lo" ip daddr 127.0.0.1 udp dp
 	if output, err := nft.CombinedOutput(); err != nil {
 		t.Fatalf("install isolated test queue: %v\n%s", err, output)
 	}
-	for _, mark := range []int{0, 0x130000, 0x120000, 0x130000, 0x120000, 0} {
+	for _, test := range []struct {
+		mark      int
+		generated []bool // One client sends all these packets on the same flow.
+	}{
+		{0, []bool{false}}, {0x130000, []bool{true}},
+		{0x120000, []bool{false, true}}, {0x140000, []bool{false, false}},
+		{0x130000, []bool{true}}, {0, []bool{false}},
+	} {
 		client, err := net.DialUDP("udp4", nil, addr)
 		if err != nil {
 			t.Fatal(err)
@@ -80,30 +98,35 @@ add rule inet zapret_trace_fixture output oifname "lo" ip daddr 127.0.0.1 udp dp
 			t.Fatal(err)
 		}
 		var markErr error
-		if err := raw.Control(func(fd uintptr) { markErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, mark) }); err != nil || markErr != nil {
+		if err := raw.Control(func(fd uintptr) {
+			markErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, test.mark)
+		}); err != nil || markErr != nil {
 			t.Fatalf("fixture socket mark: %v; %v", err, markErr)
 		}
-		if _, err := client.Write(initial); err != nil {
-			t.Fatal(err)
-		}
-		_ = listener.SetReadDeadline(time.Now().Add(2 * time.Second))
-		var received [1500]byte
-		var originals, generated int
-		for range 1 + boolInt(mark != 0) {
-			n, _, err := listener.ReadFromUDP(received[:])
-			switch {
-			case err != nil:
-				t.Fatalf("receive mark %x: %v (original=%d generated=%d)", mark, err, originals, generated)
-			case bytes.Equal(received[:n], initial):
-				originals++
-			case bytes.Equal(received[:n], []byte{0x40, 0x55, 0x49}):
-				generated++
-			default:
-				t.Fatalf("unexpected %d-byte datagram for mark %x", n, mark)
+		for i, wantGenerated := range test.generated {
+			if _, err := client.Write(initial); err != nil {
+				t.Fatal(err)
 			}
-		}
-		if originals != 1 || generated != boolInt(mark != 0) {
-			t.Fatalf("mark %x: original=%d generated=%d", mark, originals, generated)
+			_ = listener.SetReadDeadline(time.Now().Add(2 * time.Second))
+			var received [1500]byte
+			var originals, generated int
+			for range 1 + boolInt(wantGenerated) {
+				n, from, err := listener.ReadFromUDP(received[:])
+				if err != nil || from.Port != client.LocalAddr().(*net.UDPAddr).Port {
+					t.Fatalf("receive mark %x packet %d: %v from %v (original=%d generated=%d)", test.mark, i+1, err, from, originals, generated)
+				}
+				switch {
+				case bytes.Equal(received[:n], initial):
+					originals++
+				case bytes.Equal(received[:n], []byte{0x40, 0x55, 0x49}):
+					generated++
+				default:
+					t.Fatalf("unexpected %d-byte datagram for mark %x", n, test.mark)
+				}
+			}
+			if originals != 1 || generated != boolInt(wantGenerated) {
+				t.Fatalf("mark %x packet %d: original=%d generated=%d", test.mark, i+1, originals, generated)
+			}
 		}
 	}
 	_ = listener.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
@@ -121,10 +144,11 @@ add rule inet zapret_trace_fixture output oifname "lo" ip daddr 127.0.0.1 udp dp
 	if !slices.Equal(slots, [][2]int{{2, 1}, {1, 1}}) {
 		t.Fatalf("unexpected native profile observations: %v\n%s", slots, stdout.String())
 	}
-	if !slices.Equal(trace.MatchedProfiles(0), []string{"quic-action"}) || !slices.Equal(trace.MatchedProfiles(1), []string{"quic-action"}) {
-		t.Fatal("trace did not resolve both profiles to their verified IDs")
+	if !slices.Equal(trace.MatchedProfiles(0), []string{"quic-action"}) || !slices.Equal(trace.MatchedProfiles(1), []string{"quic-action"}) ||
+		len(trace.MatchedProfiles(2)) != 0 {
+		t.Fatal("trace did not report exactly the two profiles within action range")
 	}
-	t.Log("one observation per marked profile; four native-generated packets, six original datagrams intact, no unmarked generation")
+	t.Log("three native-generated packets, eight original datagrams intact; d2- matched the second datagram only, x never matched")
 }
 
 func boolInt(v bool) int {

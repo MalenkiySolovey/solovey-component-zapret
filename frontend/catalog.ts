@@ -5,7 +5,7 @@ export type ListKind = 'hostList' | 'ipSet'
 export type NamedList = { kind: ListKind; entries: string[] }
 export type ProfileListRefs = Partial<Record<NativeListField, string>>
 export type ListRefs = Record<string, ProfileListRefs>
-export type HTTPAction = { name: 'http_domcase' | 'http_hostcase'; spell?: string }
+export type HTTPAction = { name: 'http_domcase' | 'http_hostcase'; spell?: string; outRange?: string }
 
 export interface Profile {
   id: string
@@ -18,6 +18,7 @@ export interface Profile {
   httpActions?: HTTPAction[]
   quicRepeats?: number
   quicBlobRef?: string
+  outRange?: string
   lists?: Partial<Record<NativeListField, string[]>>
 }
 export interface StrategyRecord {

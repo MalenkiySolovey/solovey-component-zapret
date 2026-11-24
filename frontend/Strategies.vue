@@ -142,6 +142,17 @@
               </div>
               <v-select v-if="row.payload === 'quic_initial' && blobChoices.length > 1" v-model="row.quicBlobRef" :items="blobChoices"
                 :label="t('zapretCatalog.quicBlob')" class="mt-2" hide-details density="compact" @update:model-value="visualChanged = true" />
+              <details v-if="row.payload && !row.circular" class="mt-2"
+                :open="row.rangeInitiallyOpen || undefined">
+                <summary>{{ t('zapretCatalog.outRange') }}</summary>
+                <div v-if="row.httpActions" class="profile-fields mt-2">
+                  <v-text-field v-for="action in row.httpActions" :key="action.name" :model-value="action.outRange ?? ''"
+                    :label="httpActions.find(item => item.value === action.name)?.title" placeholder="a" maxlength="23"
+                    spellcheck="false" hide-details density="compact" @update:model-value="setActionOutRange(action, $event)" />
+                </div>
+                <v-text-field v-else v-model="row.outRange" :label="t('zapretCatalog.outRange')" placeholder="a" maxlength="23"
+                  class="mt-2" spellcheck="false" hide-details density="compact" @update:model-value="visualChanged = true" />
+              </details>
               <details class="mt-2" :open="listFields.some(field => row.lists[field] !== '' || row.refs[field]) || undefined">
                 <summary>{{ t('zapretCatalog.nativeLists') }}</summary>
                 <div class="list-fields mt-2">
@@ -206,7 +217,7 @@ import { diagnose, draftToSave, exportRecord, loadCatalog, preview, saveCatalog,
 const { t } = useI18n()
 type Row = { key: number; id: string; protocol: Profile['protocol']; family: NonNullable<Profile['family']> | ''; ports: string;
   payload: NonNullable<Profile['payload']> | ''; splitAt: string; circular?: { failures: string; splits: string }; httpActions?: HTTPAction[];
-  quicRepeats: string; quicBlobRef: string; lists: Record<NativeListField, string>; refs: ProfileListRefs }
+  quicRepeats: string; quicBlobRef: string; outRange: string; rangeInitiallyOpen?: boolean; lists: Record<NativeListField, string>; refs: ProfileListRefs }
 const listFields = ['hostList', 'hostListExclude', 'ipSet', 'ipSetExclude'] as const
 const view = ref<CatalogView>()
 const busy = ref(false)
@@ -285,6 +296,7 @@ function withRows(record?: StrategyRecord) {
     for (const field of listFields) if (refs[field]) lists[field] = ''
     return { key: ++rowKey, id: p.id, protocol: p.protocol, family: p.family ?? '', ports: p.ports.join(','),
       payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9), quicRepeats: String(p.quicRepeats ?? 1), quicBlobRef: p.quicBlobRef ?? '',
+      outRange: p.outRange ?? '', rangeInitiallyOpen: !!p.outRange || p.httpActions?.some(action => !!action.outRange),
       ...(p.circular ? { circular: { failures: String(p.circular.failures), splits: p.circular.splits.join(',') } } : {}),
       ...(p.httpActions ? { httpActions: p.httpActions.map(action => ({ ...action })) } : {}), lists, refs }
   })
@@ -301,11 +313,13 @@ function changeProtocol(row: Row, protocol: Profile['protocol']) {
   delete row.circular
   delete row.httpActions
   row.quicBlobRef = ''
+  row.outRange = ''
   visualChanged.value = true
 }
 function changePayload(row: Row, payload: Row['payload']) {
   row.payload = payload
   if (payload !== 'http_req') delete row.httpActions
+  if (!payload) row.outRange = ''
   visualChanged.value = true
 }
 function changeTCPAction(row: Row, action: string) {
@@ -313,6 +327,7 @@ function changeTCPAction(row: Row, action: string) {
   else delete row.circular
   if (action === 'http') row.httpActions ??= [{ name: 'http_domcase' }, { name: 'http_hostcase' }]
   else delete row.httpActions
+  if (action !== 'split') row.outRange = ''
   visualChanged.value = true
 }
 function changeHTTPActions(row: Row, names: HTTPAction['name'][]) {
@@ -327,6 +342,11 @@ function setHTTPSpell(row: Row, spell: string | null) {
   else delete action.spell
   visualChanged.value = true
 }
+function setActionOutRange(action: HTTPAction, value: string | null) {
+  if (value) action.outRange = value
+  else delete action.outRange
+  visualChanged.value = true
+}
 function reverseHTTPActions(row: Row) {
   row.httpActions?.reverse()
   visualChanged.value = true
@@ -334,7 +354,7 @@ function reverseHTTPActions(row: Row) {
 function addProfile() {
   let index = 1
   while (rows.value.some(row => row.id === `profile-${index}`)) index++
-  rows.value.push({ key: ++rowKey, id: `profile-${index}`, protocol: 'tcp', family: '', ports: '443', payload: '', splitAt: '9', quicRepeats: '1', quicBlobRef: '', lists: listText(), refs: {} })
+  rows.value.push({ key: ++rowKey, id: `profile-${index}`, protocol: 'tcp', family: '', ports: '443', payload: '', splitAt: '9', quicRepeats: '1', quicBlobRef: '', outRange: '', lists: listText(), refs: {} })
   visualChanged.value = true
 }
 function remove(index: number) { rows.value.splice(index, 1); visualChanged.value = true }
@@ -345,7 +365,7 @@ function move(index: number, offset: number) {
 }
 function preset(payload: NonNullable<Profile['payload']>, ports: string) {
   rows.value = [{ key: ++rowKey, id: 'profile-1', protocol: payload === 'quic_initial' ? 'udp' : 'tcp', family: '', ports, payload,
-    splitAt: '9', quicRepeats: '1', quicBlobRef: '', lists: listText(), refs: {} }]
+    splitAt: '9', quicRepeats: '1', quicBlobRef: '', outRange: '', lists: listText(), refs: {} }]
   mode.value = 'visual'
   visualChanged.value = true
 }
@@ -369,6 +389,7 @@ function draft() {
       if (entries.length) lists[field] = entries
     }
     return { id: row.id.trim(), protocol: row.protocol, ports: row.ports.split(',').map(port => Number(port.trim())),
+      ...(row.payload && !row.circular && !row.httpActions && row.outRange ? { outRange: row.outRange } : {}),
       ...(row.family ? { family: row.family } : {}), ...(row.payload === 'quic_initial' ? { payload: row.payload, quicRepeats: Number(row.quicRepeats),
         ...(row.quicBlobRef ? { quicBlobRef: row.quicBlobRef } : {}) }
         : row.payload ? { payload: row.payload, ...(row.httpActions ? { httpActions: row.httpActions } : row.circular

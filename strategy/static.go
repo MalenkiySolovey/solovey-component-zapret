@@ -66,6 +66,7 @@ type Profile struct {
 	Lists       *NativeLists          `json:"lists,omitempty"`
 	Circular    *Circular             `json:"circular,omitempty"`
 	HTTPActions []HTTPAction          `json:"httpActions,omitempty"`
+	OutRange    string                `json:"outRange,omitempty"` // Outgoing filter for a single split or QUIC action.
 }
 
 type Strategy struct {
@@ -134,6 +135,9 @@ func Seal(value Strategy) (Strategy, error) {
 			needsReturn = true
 		}
 		profile.HTTPActions = slices.Clone(profile.HTTPActions)
+		if err := profile.sealOutRanges(); err != nil {
+			return Strategy{}, fmt.Errorf("%w: profile %q: %w", ErrInvalidStrategy, profile.ID, err)
+		}
 		value.Profiles[i] = profile
 	}
 	wantAssets := nativeAssets(value.Profiles)
@@ -266,12 +270,12 @@ func (value Strategy) scope(family AddressFamily) Scope {
 	return result
 }
 
-// HandlesQUIC requires coverage independent of destination list matches. A
-// conditional action may fall through, and a passive profile may shadow it.
+// HandlesQUIC requires the built-in action independent of destination lists
+// and packet positions. A profile that shadows it may not run that action.
 func (value Strategy) HandlesQUIC(family AddressFamily, port uint16) bool {
 	for _, p := range value.Profiles {
 		if p.Protocol == intent.PacketProtocolUDP && (p.Family == "" || p.Family == family) && slices.Contains(p.Ports, port) {
-			if p.QUICRepeats == 0 || p.QUICBlobRef != "" {
+			if p.QUICRepeats == 0 || p.QUICBlobRef != "" || p.OutRange != "" {
 				return false
 			}
 			if p.Lists == nil {
@@ -412,10 +416,11 @@ func appendProfiles(args []string, value Strategy, mark uint32, binding int, gro
 			args = append(args, profile.circularArgs(fmt.Sprintf("%d/%d", binding+1, i+1), trace)...)
 			continue
 		}
-		args = append(args, profile.actionArgs(names[value.BlobData[profile.QUICBlobRef]])...)
+		var observation string
 		if trace {
-			args = append(args, fmt.Sprintf("--lua-desync=solovey_profile_match:slot=%d/%d", binding+1, i+1))
+			observation = fmt.Sprintf("--lua-desync=solovey_profile_match:slot=%d/%d", binding+1, i+1)
 		}
+		args = profile.appendActions(args, names[value.BlobData[profile.QUICBlobRef]], observation)
 	}
 	return args
 }
@@ -433,11 +438,21 @@ func payloadProtocol(value Payload) string {
 	}
 }
 
-func (p Profile) actionArgs(blob string) []string {
+func (p Profile) appendActions(args []string, blob, observation string) []string {
 	if len(p.HTTPActions) != 0 {
-		args := []string{"--filter-l7=http", "--payload=" + string(HTTPRequest)}
+		args = append(args, "--filter-l7=http", "--payload="+string(HTTPRequest))
+		var current string
 		for _, action := range p.HTTPActions {
+			args = appendOutRange(args, current, action.OutRange)
 			args = append(args, action.argument())
+			current = action.OutRange
+		}
+		if observation != "" {
+			args = append(args, observation)
+			// Observe either range without changing action order or ordinals.
+			if first := p.HTTPActions[0].OutRange; first != current {
+				args = append(appendOutRange(args, current, first), observation)
+			}
 		}
 		return args
 	}
@@ -450,8 +465,13 @@ func (p Profile) actionArgs(blob string) []string {
 			blob = defaultQUICBlobName
 		}
 		lua = fmt.Sprintf("fake:blob=%s:repeats=%d", blob, p.QUICRepeats)
-	default:
-		return nil
 	}
-	return []string{"--filter-l7=" + payloadProtocol(p.Payload), "--payload=" + string(p.Payload), "--lua-desync=" + lua}
+	if lua != "" {
+		args = append(args, "--filter-l7="+payloadProtocol(p.Payload), "--payload="+string(p.Payload))
+		args = append(appendOutRange(args, "", p.OutRange), "--lua-desync="+lua)
+	}
+	if observation != "" {
+		args = append(args, observation)
+	}
+	return args
 }
