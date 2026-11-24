@@ -155,7 +155,7 @@
                 </div>
               </details>
             </div>
-            <v-btn variant="text" prepend-icon="mdi-plus" :disabled="rows.length >= 16" @click="addProfile">{{ t('zapretCatalog.addProfile') }}</v-btn>
+            <v-btn variant="text" prepend-icon="mdi-plus" @click="addProfile">{{ t('zapretCatalog.addProfile') }}</v-btn>
           </template>
           <div class="text-caption text-medium-emphasis">{{ t('zapretCatalog.assetScope') }}</div>
         </v-card-text>

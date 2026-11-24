@@ -16,7 +16,9 @@ const (
 	TransferSchema = "solovey.zapret-transfer/v1"
 	EngineCommit   = "038c97e5819df10f8e8c22a2f1fffe57f2f7379b"
 	EngineLicense  = "MIT"
-	CatalogLimit   = 16
+	// Matches the Product's serialized settings budget. Inactive records
+	// consume storage, not a slot in the running engine.
+	MaxCatalogBytes = 256 << 10
 )
 
 // Record retains raw editor text and a separate sealed runtime definition.
@@ -59,6 +61,21 @@ type Transfer struct {
 func SealDraft(d Draft) (Record, error) { return (Catalog{}).SealDraft(d) }
 
 func (c Catalog) SealDraft(d Draft) (Record, error) {
+	r, err := c.sealDraft(d)
+	if err != nil {
+		return Record{}, err
+	}
+	data, err := json.Marshal(r.Definition)
+	if err != nil {
+		return Record{}, err
+	}
+	if len(data) > MaxDefinitionBytes {
+		return Record{}, fmt.Errorf("%w: sealed definition requires %d bytes; installation limit is %d bytes", ErrInvalidStrategy, len(data), MaxDefinitionBytes)
+	}
+	return r, nil
+}
+
+func (c Catalog) sealDraft(d Draft) (Record, error) {
 	if d.Name == "" || len(d.Name) > 120 || !utf8.ValidString(d.Name) || strings.TrimSpace(d.Name) != d.Name || strings.ContainsFunc(d.Name, unicode.IsControl) {
 		return Record{}, errors.New("enter a strategy name of at most 120 UTF-8 bytes")
 	}
@@ -97,7 +114,9 @@ func (c Catalog) SealDraft(d Draft) (Record, error) {
 func (r Record) Validate() error { return (Catalog{}).validateRecord(r) }
 
 func (c Catalog) validateRecord(r Record) error {
-	checked, err := c.SealDraft(Draft{ID: r.Definition.ID, Name: r.Name, Raw: &r.Raw, ListRefs: r.ListRefs})
+	// Keep previously stored, oversized definitions readable. New drafts
+	// must fit the broker frame before they can be saved or imported.
+	checked, err := c.sealDraft(Draft{ID: r.Definition.ID, Name: r.Name, Raw: &r.Raw, ListRefs: r.ListRefs})
 	if err != nil {
 		return err
 	}
@@ -148,8 +167,11 @@ func (t Transfer) Import() (Draft, error) {
 }
 
 func (c Catalog) Validate() error {
-	if c.Schema != CatalogSchema || c.Records == nil || len(c.Records) > CatalogLimit {
-		return errors.New("invalid Zapret catalog or too many strategies")
+	if c.Schema != CatalogSchema || c.Records == nil {
+		return errors.New("invalid Zapret catalog")
+	}
+	if err := c.checkSize(); err != nil {
+		return err
 	}
 	if err := c.validateLists(); err != nil {
 		return err
@@ -164,6 +186,17 @@ func (c Catalog) Validate() error {
 		if err := c.validateRecord(record); err != nil {
 			return fmt.Errorf("strategy %q: %w", id, err)
 		}
+	}
+	return nil
+}
+
+func (c Catalog) checkSize() error {
+	data, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	if len(data) > MaxCatalogBytes {
+		return fmt.Errorf("Zapret catalog requires %d bytes; storage limit is %d bytes", len(data), MaxCatalogBytes)
 	}
 	return nil
 }

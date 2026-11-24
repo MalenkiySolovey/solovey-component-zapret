@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -8,7 +9,20 @@ import (
 	"github.com/MalenkiySolovey/solovey-host/network/intent"
 )
 
+// Leave room in the 32 KiB transfer request for JSON escaping, the sealed
+// definition, and asset references. Runtime argv is budgeted separately.
 const MaxNativeBytes = 8 << 10
+const minimumNativeProfileBytes = len("--filter-tcp=1")
+
+var ErrUnsupportedCustomLua = errors.New("UNSUPPORTED_CUSTOM_LUA: custom Lua is not admitted; use a qualified built-in action")
+
+func nativeTextBudgetError(used int) error {
+	return fmt.Errorf("%w: native text requires at least %d bytes; limit is %d bytes", ErrInvalidStrategy, used, MaxNativeBytes)
+}
+
+func portScopeBudgetError(protocol intent.PacketProtocol, used int) error {
+	return fmt.Errorf("%w: %s scope needs %d explicit ports; the Host admits at most %d per protocol", ErrInvalidStrategy, protocol, used, maxAdmittedPorts)
+}
 
 // ParseNative accepts only bounded native profile fields. Raw text is an
 // editor input, never runnable engine argv.
@@ -23,7 +37,7 @@ func ParseNative(id, text string) (Strategy, error) {
 
 func parseNative(id, text string) (Strategy, error) {
 	if len(text) > MaxNativeBytes {
-		return Strategy{}, fmt.Errorf("%w: native text exceeds %d bytes", ErrInvalidStrategy, MaxNativeBytes)
+		return Strategy{}, nativeTextBudgetError(len(text))
 	}
 	for _, c := range text {
 		if !(c >= ' ' && c <= '~' || c == '\n' || c == '\r' || c == '\t') {
@@ -52,12 +66,12 @@ func parseNative(id, text string) (Strategy, error) {
 	}
 	for i, arg := range strings.Fields(text) {
 		key, input, hasValue := strings.Cut(arg, "=")
+		if key == "--lua-init" {
+			return Strategy{}, fmt.Errorf("%w: %w", ErrInvalidStrategy, ErrUnsupportedCustomLua)
+		}
 		if key == "--new" {
 			if err := finish(); err != nil {
 				return Strategy{}, err
-			}
-			if len(value.Profiles) >= maxProfiles {
-				return Strategy{}, fmt.Errorf("%w: too many native profiles", ErrInvalidStrategy)
 			}
 			current = first(fmt.Sprintf("profile-%d", len(value.Profiles)+1))
 			if hasValue {
@@ -85,13 +99,11 @@ func parseNative(id, text string) (Strategy, error) {
 			if key == "--filter-udp" {
 				current.Protocol = intent.PacketProtocolUDP
 			}
-			for _, port := range strings.Split(input, ",") {
-				n, err := strconv.ParseUint(port, 10, 16)
-				if err != nil || n == 0 || len(current.Ports) >= 32 {
-					return Strategy{}, bad
-				}
-				current.Ports = append(current.Ports, uint16(n))
+			ports, err := parseNativePorts(input, current.Protocol)
+			if err != nil {
+				return Strategy{}, err
 			}
+			current.Ports = ports
 		case "--filter-l7":
 			if input != "tls" && input != "http" && input != "quic" {
 				return Strategy{}, bad
@@ -182,6 +194,48 @@ func parseNative(id, text string) (Strategy, error) {
 	return value, nil
 }
 
+func parseNativePorts(input string, protocol intent.PacketProtocol) ([]uint16, error) {
+	var ports []uint16
+	for field := range strings.SplitSeq(input, ",") {
+		first, last, ranged := strings.Cut(field, "-")
+		if !ranged {
+			last = first
+		}
+		low, lowErr := strconv.ParseUint(first, 10, 16)
+		high, highErr := strconv.ParseUint(last, 10, 16)
+		if lowErr != nil || highErr != nil || low == 0 || high < low {
+			return nil, fmt.Errorf("%w: %s filter requires positive port numbers or inclusive ranges", ErrInvalidStrategy, protocol)
+		}
+		if needed := len(ports) + int(high-low) + 1; needed > maxAdmittedPorts {
+			return nil, portScopeBudgetError(protocol, needed)
+		}
+		for port := low; port <= high; port++ {
+			ports = append(ports, uint16(port))
+		}
+	}
+	return ports, nil
+}
+
+func nativePortList(ports []uint16) string {
+	var text strings.Builder
+	for i := 0; i < len(ports); {
+		if i != 0 {
+			text.WriteByte(',')
+		}
+		end := i + 1
+		for end < len(ports) && int(ports[end]) == int(ports[end-1])+1 {
+			end++
+		}
+		text.WriteString(strconv.Itoa(int(ports[i])))
+		if end > i+1 {
+			text.WriteByte('-')
+			text.WriteString(strconv.Itoa(int(ports[end-1])))
+		}
+		i = end
+	}
+	return text.String()
+}
+
 // FormatNative is used only when a visual edit changes the parsed profiles.
 // It omits all runtime-owned flags and asset paths.
 func FormatNative(value Strategy) (string, error) {
@@ -195,14 +249,7 @@ func FormatNative(value Strategy) (string, error) {
 		if i > 0 {
 			nameFlag = "--new"
 		}
-		fmt.Fprintf(&text, "%s=%s\n--filter-%s=", nameFlag, profile.ID, profile.Protocol)
-		for j, port := range profile.Ports {
-			if j > 0 {
-				text.WriteByte(',')
-			}
-			fmt.Fprint(&text, port)
-		}
-		text.WriteByte('\n')
+		fmt.Fprintf(&text, "%s=%s\n--filter-%s=%s\n", nameFlag, profile.ID, profile.Protocol, nativePortList(profile.Ports))
 		if profile.Family != "" {
 			fmt.Fprintf(&text, "--filter-l3=%s\n", profile.Family)
 		}
@@ -222,6 +269,9 @@ func FormatNative(value Strategy) (string, error) {
 		for _, arg := range profile.actionArgs(blob) {
 			fmt.Fprintln(&text, arg)
 		}
+	}
+	if text.Len() > MaxNativeBytes {
+		return "", nativeTextBudgetError(text.Len())
 	}
 	return text.String(), nil
 }

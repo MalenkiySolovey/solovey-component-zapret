@@ -175,6 +175,9 @@ func (c Catalog) WithNamedList(id string, value *NamedList) (Catalog, error) {
 		}
 		c.Records[ref] = next
 	}
+	if err := c.checkSize(); err != nil {
+		return Catalog{}, err
+	}
 	return c, nil
 }
 
@@ -202,8 +205,8 @@ func (c Catalog) WithTransfer(id string, t Transfer) (Catalog, error) {
 	if err := c.Validate(); err != nil {
 		return Catalog{}, err
 	}
-	if _, exists := c.Records[id]; exists || len(c.Records) == CatalogLimit {
-		return Catalog{}, errors.New("native strategy already exists or the catalog is full")
+	if _, exists := c.Records[id]; exists {
+		return Catalog{}, errors.New("native strategy already exists")
 	}
 	draft, err := t.Import()
 	if err != nil {
@@ -245,5 +248,8 @@ func (c Catalog) WithTransfer(id string, t Transfer) (Catalog, error) {
 	}
 	c.Records = maps.Clone(c.Records)
 	c.Records[id] = record
+	if err := c.checkSize(); err != nil {
+		return Catalog{}, err
+	}
 	return c, nil
 }
