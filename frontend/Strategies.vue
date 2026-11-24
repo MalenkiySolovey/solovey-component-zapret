@@ -121,7 +121,14 @@
                 <v-text-field v-model="row.ports" :label="t('zapretCatalog.ports')" hide-details density="compact" @update:model-value="visualChanged = true" />
                 <v-select v-model="row.payload" :items="payloads(row.protocol)" :label="t('zapretCatalog.payload')" hide-details density="compact" @update:model-value="visualChanged = true" />
                 <v-text-field v-if="row.payload === 'quic_initial'" v-model="row.quicRepeats" type="number" min="1" max="4" :label="t('zapretCatalog.quicRepeats')" hide-details density="compact" @update:model-value="visualChanged = true" />
-                <v-text-field v-else-if="row.payload" v-model="row.splitAt" type="number" min="1" max="128" :label="t('zapretCatalog.split')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                <template v-else-if="row.payload">
+                  <v-select :model-value="row.circular ? 'circular' : 'split'" :items="tcpActions" :label="t('zapretCatalog.tcpAction')" hide-details density="compact" @update:model-value="changeTCPAction(row, $event)" />
+                  <template v-if="row.circular">
+                    <v-text-field v-model="row.circular.failures" type="number" min="1" max="255" :label="t('zapretCatalog.circularFailures')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                    <v-text-field v-model="row.circular.splits" :label="t('zapretCatalog.circularSplits')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                  </template>
+                  <v-text-field v-else v-model="row.splitAt" type="number" min="1" max="128" :label="t('zapretCatalog.split')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                </template>
               </div>
               <v-select v-if="row.payload === 'quic_initial' && blobChoices.length > 1" v-model="row.quicBlobRef" :items="blobChoices"
                 :label="t('zapretCatalog.quicBlob')" class="mt-2" hide-details density="compact" @update:model-value="visualChanged = true" />
@@ -188,7 +195,8 @@ import { diagnose, draftToSave, exportRecord, loadCatalog, preview, saveCatalog,
 
 const { t } = useI18n()
 type Row = { key: number; id: string; protocol: Profile['protocol']; family: NonNullable<Profile['family']> | ''; ports: string;
-  payload: NonNullable<Profile['payload']> | ''; splitAt: string; quicRepeats: string; quicBlobRef: string; lists: Record<NativeListField, string>; refs: ProfileListRefs }
+  payload: NonNullable<Profile['payload']> | ''; splitAt: string; circular?: { failures: string; splits: string };
+  quicRepeats: string; quicBlobRef: string; lists: Record<NativeListField, string>; refs: ProfileListRefs }
 const listFields = ['hostList', 'hostListExclude', 'ipSet', 'ipSetExclude'] as const
 const view = ref<CatalogView>()
 const busy = ref(false)
@@ -230,6 +238,9 @@ const families = computed(() => [{ title: t('zapretCatalog.availableFamilies'), 
 const payloads = (protocol: Profile['protocol']) => [{ title: t('zapretCatalog.passive'), value: '' }, ...(protocol === 'udp'
   ? [{ title: 'QUIC Initial', value: 'quic_initial' }]
   : [{ title: 'TLS ClientHello', value: 'tls_client_hello' }, { title: 'HTTP request', value: 'http_req' }])]
+const tcpActions = computed(() => [
+  { title: t('zapretCatalog.split'), value: 'split' }, { title: 'Circular', value: 'circular' },
+])
 const refsFor = (id: string) => view.value?.references.filter(ref => ref.strategyRef === id) ?? []
 const affected = computed(() => refsFor(activeID.value).filter(ref => ref.enabled))
 const listAffected = computed(() => listActiveID.value ? (editingBlob.value ? blobConsumers : listConsumers)(listActiveID.value)
@@ -258,7 +269,8 @@ function withRows(record?: StrategyRecord) {
     const lists = listText(p.lists)
     for (const field of listFields) if (refs[field]) lists[field] = ''
     return { key: ++rowKey, id: p.id, protocol: p.protocol, family: p.family ?? '', ports: p.ports.join(','),
-      payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9), quicRepeats: String(p.quicRepeats ?? 1), quicBlobRef: p.quicBlobRef ?? '', lists, refs }
+      payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9), quicRepeats: String(p.quicRepeats ?? 1), quicBlobRef: p.quicBlobRef ?? '',
+      ...(p.circular ? { circular: { failures: String(p.circular.failures), splits: p.circular.splits.join(',') } } : {}), lists, refs }
   })
 }
 function setListRef(row: Row, field: NativeListField, value: string | null) {
@@ -270,7 +282,13 @@ function changeProtocol(row: Row, protocol: Profile['protocol']) {
   if (row.protocol === protocol) return
   row.protocol = protocol
   row.payload = ''
+  delete row.circular
   row.quicBlobRef = ''
+  visualChanged.value = true
+}
+function changeTCPAction(row: Row, action: string) {
+  if (action === 'circular') row.circular ??= { failures: '1', splits: '9,17' }
+  else delete row.circular
   visualChanged.value = true
 }
 function addProfile() {
@@ -313,7 +331,9 @@ function draft() {
     return { id: row.id.trim(), protocol: row.protocol, ports: row.ports.split(',').map(port => Number(port.trim())),
       ...(row.family ? { family: row.family } : {}), ...(row.payload === 'quic_initial' ? { payload: row.payload, quicRepeats: Number(row.quicRepeats),
         ...(row.quicBlobRef ? { quicBlobRef: row.quicBlobRef } : {}) }
-        : row.payload ? { payload: row.payload, splitAt: Number(row.splitAt) } : {}), ...(Object.keys(lists).length ? { lists } : {}) }
+        : row.payload ? { payload: row.payload, ...(row.circular
+          ? { circular: { failures: Number(row.circular.failures), splits: row.circular.splits.split(',').map(split => Number(split.trim())) } }
+          : { splitAt: Number(row.splitAt) }) } : {}), ...(Object.keys(lists).length ? { lists } : {}) }
   })
   const refs = visualChanged.value ? Object.fromEntries(rows.value.filter(row => Object.keys(row.refs).length).map(row => [row.id.trim(), row.refs])) : rawRefs.value
   return draftToSave(name.value.trim(), raw.value, profiles, visualChanged.value, refs)

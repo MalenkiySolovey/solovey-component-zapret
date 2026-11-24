@@ -39,6 +39,21 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	validateEngineArgs(t, root, argv)
+	value, err = ParseNative("fixture-circular", circularFixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings[0].Strategy = value
+	argv, _, err = CompileBindingsForReturnPath(root, 401, 0x40000000, bindings, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validateEngineArgs(t, root, argv)
+}
+
+func validateEngineArgs(t *testing.T, root string, argv []string) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, filepath.Join(root, "nfqws2"), append([]string{"--dry-run", "--intercept=0"}, argv...)...)

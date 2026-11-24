@@ -8,6 +8,7 @@ export default { zapretCatalog: {
   name: 'Name', tlsPreset: 'TLS/TCP preset', httpPreset: 'HTTP/TCP preset', quicPreset: 'QUIC/UDP preset', visual: 'Profiles', raw: 'Native options',
   profile: 'Profile {index}', profileID: 'Profile ID', protocol: 'Protocol', family: 'IP family', availableFamilies: 'Available families',
   ports: 'Ports (comma-separated)', payload: 'Payload', split: 'Split byte', quicRepeats: 'QUIC copies',
+  tcpAction: 'TCP action', circularFailures: 'Failures before rotation', circularSplits: 'Split bytes (ordered)',
   passive: 'No transformation', moveUp: 'Move profile up', moveDown: 'Move profile down', removeProfile: 'Remove profile', addProfile: 'Add profile',
   nativeLists: 'Native filters', hostList: 'Include domains', hostListExclude: 'Exclude domains',
   ipSet: 'Include IP addresses or prefixes', ipSetExclude: 'Exclude IP addresses or prefixes',

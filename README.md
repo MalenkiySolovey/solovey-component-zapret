@@ -28,7 +28,11 @@ Static profiles support explicit TCP or UDP ports and optional IP-family
 filters. The bounded QUIC Initial action defaults to the upstream built-in
 blob. A consumer still needs installed broker
 and Network Planner admission for the requested packet scope. Native Circular
-requires return observation, which the installed outgoing-only profile rejects.
+uses ordered variants of the pinned `zapret-auto.lua` action. The compiler
+requires an already-admitted return path before producing Circular arguments;
+the installed outgoing-only profile still rejects activation. Native options
+and the visual editor both preserve variant order and the reply observation
+window. Arbitrary Lua and external file references remain unsupported.
 Selected bindings with distinct Planner marks share one native argument list.
 Its byte budget includes argument overhead and leaves room for the installed
 broker's fixed launcher arguments and environment.

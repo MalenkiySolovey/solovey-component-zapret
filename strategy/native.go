@@ -32,8 +32,8 @@ func parseNative(id, text string) (Strategy, error) {
 	}
 	type draft struct {
 		Profile
-		l7   string
-		seen map[string]bool
+		l7, inRange string
+		seen        map[string]bool
 	}
 	first := func(id string) draft {
 		return draft{Profile: Profile{ID: id}, seen: map[string]bool{}}
@@ -43,11 +43,9 @@ func parseNative(id, text string) (Strategy, error) {
 	finish := func() error {
 		if current.Protocol == "" || current.seen["--payload"] != current.seen["--lua-desync"] ||
 			current.seen["--filter-l7"] != current.hasAction() ||
-			current.hasAction() && payloadProtocol(current.Payload) != current.l7 {
+			current.hasAction() && payloadProtocol(current.Payload) != current.l7 ||
+			current.inRange != "" && current.Circular == nil {
 			return fmt.Errorf("%w: incomplete or inconsistent native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
-		}
-		if current.hasAction() {
-			value.Assets = []AssetRef{Library, Actions}
 		}
 		value.Profiles = append(value.Profiles, current.Profile)
 		return nil
@@ -58,7 +56,7 @@ func parseNative(id, text string) (Strategy, error) {
 			if err := finish(); err != nil {
 				return Strategy{}, err
 			}
-			if len(value.Profiles) >= 16 {
+			if len(value.Profiles) >= maxProfiles {
 				return Strategy{}, fmt.Errorf("%w: too many native profiles", ErrInvalidStrategy)
 			}
 			current = first(fmt.Sprintf("profile-%d", len(value.Profiles)+1))
@@ -69,7 +67,8 @@ func parseNative(id, text string) (Strategy, error) {
 			continue
 		}
 		bad := fmt.Errorf("%w: unsupported or malformed native option %d", ErrInvalidStrategy, i+1)
-		if !hasValue || input == "" || current.seen[key] {
+		repeatable := key == "--in-range" || key == "--lua-desync" && current.Circular != nil
+		if !hasValue || input == "" || current.seen[key] && !repeatable {
 			return Strategy{}, bad
 		}
 		current.seen[key] = true
@@ -98,11 +97,41 @@ func parseNative(id, text string) (Strategy, error) {
 				return Strategy{}, bad
 			}
 			current.l7 = input
+		case "--in-range":
+			// The pinned engine snapshots the range at each Lua action.
+			observe := current.inRange == "" && input == circularObserveRange() && !current.seen["--lua-desync"]
+			disable := current.inRange == circularObserveRange() && input == circularVariantRange && current.Circular != nil
+			if current.seen["--payload"] || !(observe || disable) {
+				return Strategy{}, bad
+			}
+			current.inRange = input
 		case "--payload":
+			if current.Circular != nil && current.inRange != circularVariantRange {
+				return Strategy{}, bad
+			}
 			current.Payload = Payload(input)
 		case "--lua-desync":
-			if input == "circular" || strings.HasPrefix(input, "circular:") {
-				return Strategy{}, fmt.Errorf("native Circular is unavailable: %w", errReturnObservationUnavailable)
+			if current.Circular != nil {
+				if current.inRange != circularVariantRange || !current.seen["--payload"] || !current.Circular.addVariant(input) {
+					return Strategy{}, bad
+				}
+				continue
+			}
+			if fails, ok := strings.CutPrefix(input, "circular:fails="); input == "circular" || ok {
+				if current.inRange != circularObserveRange() || current.seen["--payload"] {
+					return Strategy{}, fmt.Errorf("%w: Circular requires --in-range=%s before its action, then --in-range=%s and --payload before its variants",
+						ErrInvalidStrategy, circularObserveRange(), circularVariantRange)
+				}
+				n := uint64(3)
+				if ok {
+					var err error
+					n, err = strconv.ParseUint(fails, 10, 8)
+					if err != nil {
+						return Strategy{}, bad
+					}
+				}
+				current.Circular = &Circular{Failures: uint8(n)}
+				continue
 			}
 			if pos, ok := strings.CutPrefix(input, "multisplit:pos="); ok {
 				n, err := strconv.ParseUint(pos, 10, 16)
@@ -139,6 +168,7 @@ func parseNative(id, text string) (Strategy, error) {
 	if err := finish(); err != nil {
 		return Strategy{}, err
 	}
+	value.Assets = nativeAssets(value.Profiles)
 	return value, nil
 }
 
@@ -151,9 +181,6 @@ func FormatNative(value Strategy) (string, error) {
 	}
 	var text strings.Builder
 	for i, profile := range value.Profiles {
-		if value.NeedsReturn {
-			return "", errReturnObservationUnavailable
-		}
 		nameFlag := "--name"
 		if i > 0 {
 			nameFlag = "--new"
@@ -171,6 +198,12 @@ func FormatNative(value Strategy) (string, error) {
 		}
 		for _, arg := range profile.Lists.appendArgs(nil) {
 			fmt.Fprintln(&text, arg)
+		}
+		if profile.Circular != nil {
+			for _, arg := range profile.circularArgs("", false) {
+				fmt.Fprintln(&text, arg)
+			}
+			continue
 		}
 		var blob string
 		if profile.QUICBlobRef != "" {
