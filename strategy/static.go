@@ -49,8 +49,7 @@ const (
 	QUICInitial    Payload = "quic_initial"
 )
 
-// A profile can observe packets without changing them, split a known TCP
-// payload, or emit a bounded QUIC decoy alongside the original.
+// A profile matches one packet scope and applies a bounded native action.
 type Profile struct {
 	ID          string                `json:"id"`
 	Protocol    intent.PacketProtocol `json:"protocol"`
@@ -62,6 +61,7 @@ type Profile struct {
 	Family      AddressFamily         `json:"family,omitempty"` // Empty matches either admitted family.
 	Lists       *NativeLists          `json:"lists,omitempty"`
 	Circular    *Circular             `json:"circular,omitempty"`
+	HTTPActions []HTTPAction          `json:"httpActions,omitempty"`
 }
 
 type Strategy struct {
@@ -123,6 +123,7 @@ func Seal(value Strategy) (Strategy, error) {
 			profile.Circular = &cfg
 			needsReturn = true
 		}
+		profile.HTTPActions = slices.Clone(profile.HTTPActions)
 		value.Profiles[i] = profile
 	}
 	wantAssets := nativeAssets(value.Profiles)
@@ -153,7 +154,9 @@ func Seal(value Strategy) (Strategy, error) {
 	return value, nil
 }
 
-func (p Profile) hasAction() bool { return p.SplitAt != 0 || p.QUICRepeats != 0 || p.Circular != nil }
+func (p Profile) hasAction() bool {
+	return p.SplitAt != 0 || p.QUICRepeats != 0 || p.Circular != nil || len(p.HTTPActions) != 0
+}
 
 func nativeAssets(profiles []Profile) []AssetRef {
 	var actions bool
@@ -174,6 +177,9 @@ func (p Profile) validAction() bool {
 		return false
 	}
 	switch {
+	case len(p.HTTPActions) != 0:
+		return p.Protocol == intent.PacketProtocolTCP && p.Payload == HTTPRequest && p.SplitAt == 0 && p.QUICRepeats == 0 &&
+			p.Circular == nil && validHTTPActions(p.HTTPActions)
 	case p.Circular != nil:
 		return p.Protocol == intent.PacketProtocolTCP && p.SplitAt == 0 && p.QUICRepeats == 0 &&
 			(p.Payload == TLSClientHello || p.Payload == HTTPRequest) && p.Circular.valid()
@@ -419,6 +425,13 @@ func payloadProtocol(value Payload) string {
 }
 
 func (p Profile) actionArgs(blob string) []string {
+	if len(p.HTTPActions) != 0 {
+		args := []string{"--filter-l7=http", "--payload=" + string(HTTPRequest)}
+		for _, action := range p.HTTPActions {
+			args = append(args, action.argument())
+		}
+		return args
+	}
 	var lua string
 	switch {
 	case p.SplitAt != 0:

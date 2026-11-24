@@ -67,7 +67,7 @@ func parseNative(id, text string) (Strategy, error) {
 			continue
 		}
 		bad := fmt.Errorf("%w: unsupported or malformed native option %d", ErrInvalidStrategy, i+1)
-		repeatable := key == "--in-range" || key == "--lua-desync" && current.Circular != nil
+		repeatable := key == "--in-range" || key == "--lua-desync" && (current.Circular != nil || len(current.HTTPActions) != 0)
 		if !hasValue || input == "" || current.seen[key] && !repeatable {
 			return Strategy{}, bad
 		}
@@ -116,6 +116,16 @@ func parseNative(id, text string) (Strategy, error) {
 					return Strategy{}, bad
 				}
 				continue
+			}
+			if action, ok := parseHTTPAction(input); ok {
+				if current.Payload != HTTPRequest || current.inRange != "" || len(current.HTTPActions) == 2 {
+					return Strategy{}, bad
+				}
+				current.HTTPActions = append(current.HTTPActions, action)
+				continue
+			}
+			if len(current.HTTPActions) != 0 {
+				return Strategy{}, bad
 			}
 			if fails, ok := strings.CutPrefix(input, "circular:fails="); input == "circular" || ok {
 				if current.inRange != circularObserveRange() || current.seen["--payload"] {

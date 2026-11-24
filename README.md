@@ -4,14 +4,15 @@ This repository owns the independent Solovey Zapret component foundation. It
 keeps the user-facing binding small and typed:
 
 ```text
-Routing -> Direct Outbound -> ZapretBinding -> Strategy -> Network Planner
+Routing -> Egress Outbound -> ZapretBinding -> Strategy -> Network Planner
 ```
 
 The component does not own Routing, DNS, Outbounds, nftables, fw4, queue/mark
-allocation or a privileged shell. `ZapretBinding` is valid only for a Direct
-Outbound with an empty detour. `Enabled=false` projects no packet-path intent;
-`Enabled=true` with a missing Strategy, missing component capability or an
-unsupported Direct fails closed.
+allocation or a privileged shell. The installed Host and Product qualify the
+actual egress socket. An active binding cannot be attached to a logical group
+or an intermediate hop that delegates its socket to a detour. `Enabled=false`
+projects no packet-path intent. An enabled binding with a missing Strategy or
+an unavailable packet path fails closed.
 
 The current source slice contains one ordered native profile model and a
 deterministic `nfqws2` command-line compiler. ComponentHost lifecycle start is
@@ -27,7 +28,10 @@ The upstream engine is an external, checksum-verified build input recorded in
 Static profiles support explicit TCP or UDP ports and optional IP-family
 filters. The bounded QUIC Initial action defaults to the upstream built-in
 blob. A consumer still needs installed broker
-and Network Planner admission for the requested packet scope. Native Circular
+and Network Planner admission for the requested packet scope. For TCP HTTP
+requests, a profile can run the pinned `http_hostcase` and `http_domcase`
+actions in the stored order. The optional `spell` on `http_hostcase` changes
+only the casing of the four letters in `Host`. Native Circular
 uses ordered variants of the pinned `zapret-auto.lua` action. The compiler
 requires an already-admitted return path before producing Circular arguments;
 the installed outgoing-only profile still rejects activation. Native options

@@ -119,16 +119,26 @@
                 <v-select :model-value="row.protocol" :items="['tcp', 'udp']" :label="t('zapretCatalog.protocol')" hide-details density="compact" @update:model-value="changeProtocol(row, $event)" />
                 <v-select v-model="row.family" :items="families" :label="t('zapretCatalog.family')" hide-details density="compact" @update:model-value="visualChanged = true" />
                 <v-text-field v-model="row.ports" :label="t('zapretCatalog.ports')" hide-details density="compact" @update:model-value="visualChanged = true" />
-                <v-select v-model="row.payload" :items="payloads(row.protocol)" :label="t('zapretCatalog.payload')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                <v-select :model-value="row.payload" :items="payloads(row.protocol)" :label="t('zapretCatalog.payload')" hide-details density="compact" @update:model-value="changePayload(row, $event)" />
                 <v-text-field v-if="row.payload === 'quic_initial'" v-model="row.quicRepeats" type="number" min="1" max="4" :label="t('zapretCatalog.quicRepeats')" hide-details density="compact" @update:model-value="visualChanged = true" />
                 <template v-else-if="row.payload">
-                  <v-select :model-value="row.circular ? 'circular' : 'split'" :items="tcpActions" :label="t('zapretCatalog.tcpAction')" hide-details density="compact" @update:model-value="changeTCPAction(row, $event)" />
+                  <v-select :model-value="row.httpActions ? 'http' : row.circular ? 'circular' : 'split'" :items="tcpActions(row.payload)" :label="t('zapretCatalog.tcpAction')" hide-details density="compact" @update:model-value="changeTCPAction(row, $event)" />
                   <template v-if="row.circular">
                     <v-text-field v-model="row.circular.failures" type="number" min="1" max="255" :label="t('zapretCatalog.circularFailures')" hide-details density="compact" @update:model-value="visualChanged = true" />
                     <v-text-field v-model="row.circular.splits" :label="t('zapretCatalog.circularSplits')" hide-details density="compact" @update:model-value="visualChanged = true" />
                   </template>
-                  <v-text-field v-else v-model="row.splitAt" type="number" min="1" max="128" :label="t('zapretCatalog.split')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                  <v-text-field v-else-if="!row.httpActions" v-model="row.splitAt" type="number" min="1" max="128" :label="t('zapretCatalog.split')" hide-details density="compact" @update:model-value="visualChanged = true" />
                 </template>
+              </div>
+              <div v-if="row.httpActions" class="profile-fields mt-2">
+                <v-select :model-value="row.httpActions.map(action => action.name)" :items="httpActions" multiple
+                  :label="t('zapretCatalog.httpOrder')" hide-details density="compact" @update:model-value="changeHTTPActions(row, $event)" />
+                <v-text-field v-if="row.httpActions.some(action => action.name === 'http_hostcase')" maxlength="4"
+                  :model-value="row.httpActions.find(action => action.name === 'http_hostcase')?.spell ?? ''"
+                  :label="t('zapretCatalog.httpSpell')" placeholder="host" spellcheck="false" hide-details density="compact"
+                  @update:model-value="setHTTPSpell(row, $event)" />
+                <v-btn v-if="row.httpActions.length > 1" icon="mdi-swap-vertical" size="small" variant="text"
+                  :aria-label="t('zapretCatalog.httpReverse')" :title="t('zapretCatalog.httpReverse')" @click="reverseHTTPActions(row)" />
               </div>
               <v-select v-if="row.payload === 'quic_initial' && blobChoices.length > 1" v-model="row.quicBlobRef" :items="blobChoices"
                 :label="t('zapretCatalog.quicBlob')" class="mt-2" hide-details density="compact" @update:model-value="visualChanged = true" />
@@ -191,11 +201,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { diagnose, draftToSave, exportRecord, loadCatalog, preview, saveCatalog, type CatalogView, type ListKind, type ListRefs, type NamedList, type NativeListField, type Profile, type ProfileListRefs, type StrategyRecord, type StrategyReference } from './catalog'
+import { diagnose, draftToSave, exportRecord, loadCatalog, preview, saveCatalog, type CatalogView, type HTTPAction, type ListKind, type ListRefs, type NamedList, type NativeListField, type Profile, type ProfileListRefs, type StrategyRecord, type StrategyReference } from './catalog'
 
 const { t } = useI18n()
 type Row = { key: number; id: string; protocol: Profile['protocol']; family: NonNullable<Profile['family']> | ''; ports: string;
-  payload: NonNullable<Profile['payload']> | ''; splitAt: string; circular?: { failures: string; splits: string };
+  payload: NonNullable<Profile['payload']> | ''; splitAt: string; circular?: { failures: string; splits: string }; httpActions?: HTTPAction[];
   quicRepeats: string; quicBlobRef: string; lists: Record<NativeListField, string>; refs: ProfileListRefs }
 const listFields = ['hostList', 'hostListExclude', 'ipSet', 'ipSetExclude'] as const
 const view = ref<CatalogView>()
@@ -238,8 +248,13 @@ const families = computed(() => [{ title: t('zapretCatalog.availableFamilies'), 
 const payloads = (protocol: Profile['protocol']) => [{ title: t('zapretCatalog.passive'), value: '' }, ...(protocol === 'udp'
   ? [{ title: 'QUIC Initial', value: 'quic_initial' }]
   : [{ title: 'TLS ClientHello', value: 'tls_client_hello' }, { title: 'HTTP request', value: 'http_req' }])]
-const tcpActions = computed(() => [
+const tcpActions = (payload: Row['payload']) => [
   { title: t('zapretCatalog.split'), value: 'split' }, { title: 'Circular', value: 'circular' },
+  ...(payload === 'http_req' ? [{ title: t('zapretCatalog.httpTransforms'), value: 'http' }] : []),
+]
+const httpActions = computed(() => [
+  { title: t('zapretCatalog.httpDomainCase'), value: 'http_domcase' },
+  { title: t('zapretCatalog.httpHostCase'), value: 'http_hostcase' },
 ])
 const refsFor = (id: string) => view.value?.references.filter(ref => ref.strategyRef === id) ?? []
 const affected = computed(() => refsFor(activeID.value).filter(ref => ref.enabled))
@@ -270,7 +285,8 @@ function withRows(record?: StrategyRecord) {
     for (const field of listFields) if (refs[field]) lists[field] = ''
     return { key: ++rowKey, id: p.id, protocol: p.protocol, family: p.family ?? '', ports: p.ports.join(','),
       payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9), quicRepeats: String(p.quicRepeats ?? 1), quicBlobRef: p.quicBlobRef ?? '',
-      ...(p.circular ? { circular: { failures: String(p.circular.failures), splits: p.circular.splits.join(',') } } : {}), lists, refs }
+      ...(p.circular ? { circular: { failures: String(p.circular.failures), splits: p.circular.splits.join(',') } } : {}),
+      ...(p.httpActions ? { httpActions: p.httpActions.map(action => ({ ...action })) } : {}), lists, refs }
   })
 }
 function setListRef(row: Row, field: NativeListField, value: string | null) {
@@ -283,12 +299,36 @@ function changeProtocol(row: Row, protocol: Profile['protocol']) {
   row.protocol = protocol
   row.payload = ''
   delete row.circular
+  delete row.httpActions
   row.quicBlobRef = ''
+  visualChanged.value = true
+}
+function changePayload(row: Row, payload: Row['payload']) {
+  row.payload = payload
+  if (payload !== 'http_req') delete row.httpActions
   visualChanged.value = true
 }
 function changeTCPAction(row: Row, action: string) {
   if (action === 'circular') row.circular ??= { failures: '1', splits: '9,17' }
   else delete row.circular
+  if (action === 'http') row.httpActions ??= [{ name: 'http_domcase' }, { name: 'http_hostcase' }]
+  else delete row.httpActions
+  visualChanged.value = true
+}
+function changeHTTPActions(row: Row, names: HTTPAction['name'][]) {
+  if (!names.length) return
+  row.httpActions = names.map(name => row.httpActions?.find(action => action.name === name) ?? { name })
+  visualChanged.value = true
+}
+function setHTTPSpell(row: Row, spell: string | null) {
+  const action = row.httpActions?.find(action => action.name === 'http_hostcase')
+  if (!action) return
+  if (spell) action.spell = spell
+  else delete action.spell
+  visualChanged.value = true
+}
+function reverseHTTPActions(row: Row) {
+  row.httpActions?.reverse()
   visualChanged.value = true
 }
 function addProfile() {
@@ -331,7 +371,7 @@ function draft() {
     return { id: row.id.trim(), protocol: row.protocol, ports: row.ports.split(',').map(port => Number(port.trim())),
       ...(row.family ? { family: row.family } : {}), ...(row.payload === 'quic_initial' ? { payload: row.payload, quicRepeats: Number(row.quicRepeats),
         ...(row.quicBlobRef ? { quicBlobRef: row.quicBlobRef } : {}) }
-        : row.payload ? { payload: row.payload, ...(row.circular
+        : row.payload ? { payload: row.payload, ...(row.httpActions ? { httpActions: row.httpActions } : row.circular
           ? { circular: { failures: Number(row.circular.failures), splits: row.circular.splits.split(',').map(split => Number(split.trim())) } }
           : { splitAt: Number(row.splitAt) }) } : {}), ...(Object.keys(lists).length ? { lists } : {}) }
   })
