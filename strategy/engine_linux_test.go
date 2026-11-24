@@ -31,9 +31,11 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	argv, err := CompileBindings(root, 401, 0x40000000, []MarkedStrategy{
-		{Strategy: sealed.Definition, QueueMark: 0x120000}, {Strategy: sealed.Definition, QueueMark: 0x130000},
-	})
+	bindings := make([]MarkedStrategy, 6)
+	for i := range bindings {
+		bindings[i] = MarkedStrategy{Strategy: sealed.Definition, QueueMark: 0x120000 + uint32(i)}
+	}
+	argv, err := CompileBindings(root, 401, 0x40000000, bindings)
 	if err != nil {
 		t.Fatal(err)
 	}

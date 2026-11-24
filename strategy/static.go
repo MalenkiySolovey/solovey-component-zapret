@@ -28,10 +28,7 @@ const (
 
 const defaultQUICBlobName = "fake_default_quic"
 
-const (
-	maxBindings = 3
-	maxProfiles = 16
-)
+const maxProfiles = 16
 
 type Payload string
 
@@ -250,13 +247,17 @@ func CompileBindingsWithNativeTrace(engineRoot string, queue uint16, loopMark ui
 }
 
 func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy, trace bool) ([]string, *NativeTrace, error) {
-	if queue == 0 || loopMark == 0 || loopMark&(loopMark-1) != 0 || len(bindings) == 0 || len(bindings) > maxBindings ||
+	if queue == 0 || loopMark == 0 || loopMark&(loopMark-1) != 0 || len(bindings) == 0 ||
 		!path.IsAbs(engineRoot) || path.Clean(engineRoot) != engineRoot || len(engineRoot) > 512 || strings.ContainsAny(engineRoot, "\x00\r\n") {
 		return nil, nil, errors.New("invalid Zapret engine root or Network Planner allocation")
+	}
+	if len(bindings) > engineArgumentBudget/minimumEngineProfileBytes {
+		return nil, nil, argumentBudgetError((engineArgumentBudget/minimumEngineProfileBytes + 1) * minimumEngineProfileBytes)
 	}
 	verified := make([]Strategy, len(bindings))
 	seen := make(map[uint32]bool, len(bindings))
 	needsLua := false
+	minimum := 0
 	for i, item := range bindings {
 		if item.QueueMark == 0 || item.QueueMark&loopMark != 0 || seen[item.QueueMark] {
 			return nil, nil, errors.New("invalid or repeated Zapret queue mark")
@@ -269,6 +270,10 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 		if sealed.NeedsReturn {
 			return nil, nil, errReturnObservationUnavailable
 		}
+		minimum += len(sealed.Profiles) * minimumEngineProfileBytes
+		if minimum > engineArgumentBudget {
+			return nil, nil, argumentBudgetError(minimum)
+		}
 		verified[i] = sealed
 		needsLua = needsLua || len(sealed.Assets) != 0
 	}
@@ -277,10 +282,12 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 		args = append(args, "--lua-init=@"+path.Join(engineRoot, "lua/zapret-lib.lua"),
 			"--lua-init=@"+path.Join(engineRoot, "lua/zapret-antidpi.lua"))
 	}
-	var observations *NativeTrace
 	if trace {
 		args = append(args, "--lua-init="+nativeTraceLua)
-		observations = newNativeTrace(verified)
+	}
+	used := 0
+	if err := chargeEngineArgs(&used, args); err != nil {
+		return nil, nil, err
 	}
 	// Binary data is serialized as hex only. Engine-global Lua variables use
 	// generated names, never catalog IDs or names supplied by the raw editor.
@@ -292,11 +299,22 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 				name := fmt.Sprintf("solovey_blob_%d", len(names)+1)
 				names[data] = name
 				args = append(args, "--blob="+name+":0x"+data)
+				if err := chargeEngineArgs(&used, args[len(args)-1:]); err != nil {
+					return nil, nil, err
+				}
 			}
 		}
 	}
 	for i, sealed := range verified {
+		before := len(args)
 		args = appendProfiles(args, sealed, bindings[i].QueueMark, i, len(bindings) > 1, names, trace)
+		if err := chargeEngineArgs(&used, args[before:]); err != nil {
+			return nil, nil, err
+		}
+	}
+	var observations *NativeTrace
+	if trace {
+		observations = newNativeTrace(verified)
 	}
 	return args, observations, nil
 }

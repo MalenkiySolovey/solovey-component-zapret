@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -30,7 +31,7 @@ func TestNativeTraceUsesOnlyCompilerSlots(t *testing.T) {
 	if b, p, ok := parseNativeTrace(nativeTracePrefix + "3/16"); !ok || b != 3 || p != 16 {
 		t.Fatal("lost a valid bounded observation")
 	}
-	for _, invalid := range []string{"0/1", "4/1", "1/0", "1/17", "1/01", "1/+2", "1/2\n", "1/2/3", "1/2 remote.example"} {
+	for _, invalid := range []string{"0/1", "1/0", "1/01", "1/+2", "1/2\n", "1/2/3", "1/2 remote.example"} {
 		if _, _, ok := parseNativeTrace(nativeTracePrefix + invalid); ok {
 			t.Fatalf("accepted non-canonical trace record %q", invalid)
 		}
@@ -51,5 +52,36 @@ func TestNativeTraceUsesOnlyCompilerSlots(t *testing.T) {
 	_, next, err := CompileBindingsWithNativeTrace("/engine", 400, 0x40000000, bindings)
 	if err != nil || len(next.MatchedProfiles(0)) != 0 {
 		t.Fatal("a new engine trace inherited retired observations")
+	}
+}
+
+func TestNativeTraceScalesWithCompiledBindingBudget(t *testing.T) {
+	value := fixture(t)
+	const loopMark = 0x40000000
+	bindings := make([]MarkedStrategy, 12)
+	for i := range bindings {
+		bindings[i] = MarkedStrategy{Strategy: value, QueueMark: uint32(i + 1)}
+	}
+	args, trace, err := CompileBindingsWithNativeTrace("/engine", 400, loopMark, bindings)
+	if err != nil || !slices.Contains(args, "--lua-desync=solovey_profile_match:slot=12/1") {
+		t.Fatalf("twelve bindings did not compile with trace: %v", err)
+	}
+	for _, slot := range []string{"13/1", "12/17", "12/1", "12/1"} {
+		if _, err := trace.Write([]byte(nativeTracePrefix + slot + "\n")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := trace.MatchedProfiles(11); !slices.Equal(got, []string{value.Profiles[0].ID}) ||
+		len(trace.MatchedProfiles(0)) != 0 || len(trace.MatchedProfiles(12)) != 0 {
+		t.Fatalf("trace admitted an out-of-generation slot: %v", got)
+	}
+
+	// Stay below the minimum-byte precheck but exceed actual argv bytes.
+	large := make([]MarkedStrategy, engineArgumentBudget/minimumEngineProfileBytes)
+	for i := range large {
+		large[i] = MarkedStrategy{Strategy: value, QueueMark: uint32(i + 1)}
+	}
+	if args, trace, err := CompileBindingsWithNativeTrace("/engine", 400, loopMark, large); !errors.Is(err, ErrEngineArgumentBudget) || args != nil || trace != nil {
+		t.Fatalf("oversize compiled generation was not rejected atomically: %v", err)
 	}
 }
