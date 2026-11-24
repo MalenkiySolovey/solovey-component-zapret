@@ -9,6 +9,8 @@ export default { zapretCatalog: {
   profile: 'Профиль {index}', profileID: 'ID профиля', protocol: 'Протокол', family: 'Семейство IP', availableFamilies: 'Доступные семейства',
   ports: 'Порты через запятую', payload: 'Тип данных', split: 'Байт разделения', quicRepeats: 'Копии QUIC',
   tcpAction: 'Действие TCP', circularFailures: 'Сбои до переключения', circularSplits: 'Байты разделения (по порядку)',
+  httpTransforms: 'Преобразования заголовка HTTP', httpOrder: 'Действия HTTP (по порядку)', httpSpell: 'Написание заголовка Host',
+  httpDomainCase: 'Регистр значения Host', httpHostCase: 'Регистр заголовка Host', httpReverse: 'Обратить порядок действий HTTP',
   passive: 'Без преобразования', moveUp: 'Поднять профиль', moveDown: 'Опустить профиль', removeProfile: 'Удалить профиль', addProfile: 'Добавить профиль',
   nativeLists: 'Фильтры движка', hostList: 'Включить домены', hostListExclude: 'Исключить домены',
   ipSet: 'Включить IP-адреса или подсети', ipSetExclude: 'Исключить IP-адреса или подсети',
