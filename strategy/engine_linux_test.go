@@ -55,6 +55,11 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	bindings[2].Strategy = value
+	value, err = ParseNative("fixture-action-range", rangedActionFixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings[3].Strategy = value
 	argv, _, err = CompileBindingsForReturnPath(root, 401, 0x40000000, bindings, true)
 	if err != nil {
 		t.Fatal(err)

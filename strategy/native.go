@@ -46,8 +46,9 @@ func parseNative(id, text string) (Strategy, error) {
 	}
 	type draft struct {
 		Profile
-		l7, inRange string
-		seen        map[string]bool
+		l7, inRange, outRange string
+		outRangePending       bool
+		seen                  map[string]bool
 	}
 	first := func(id string) draft {
 		return draft{Profile: Profile{ID: id}, seen: map[string]bool{}}
@@ -55,6 +56,9 @@ func parseNative(id, text string) (Strategy, error) {
 	current := first("profile-1")
 	value := Strategy{Schema: Schema, ID: id}
 	finish := func() error {
+		if current.outRangePending {
+			return fmt.Errorf("%w: --out-range needs a following action in native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
+		}
 		if current.Protocol == "" || current.seen["--payload"] != current.seen["--lua-desync"] ||
 			current.seen["--filter-l7"] != current.hasAction() ||
 			current.hasAction() && payloadProtocol(current.Payload) != current.l7 ||
@@ -81,7 +85,7 @@ func parseNative(id, text string) (Strategy, error) {
 			continue
 		}
 		bad := fmt.Errorf("%w: unsupported or malformed native option %d", ErrInvalidStrategy, i+1)
-		repeatable := key == "--in-range" || key == "--lua-desync" && (current.Circular != nil || len(current.HTTPActions) != 0)
+		repeatable := key == "--in-range" || key == "--out-range" || key == "--lua-desync" && (current.Circular != nil || len(current.HTTPActions) != 0)
 		if !hasValue || input == "" || current.seen[key] && !repeatable {
 			return Strategy{}, bad
 		}
@@ -117,6 +121,14 @@ func parseNative(id, text string) (Strategy, error) {
 				return Strategy{}, bad
 			}
 			current.inRange = input
+		case "--out-range":
+			if current.Circular != nil {
+				return Strategy{}, fmt.Errorf("%w: --out-range is not qualified for Circular's return-path action", ErrInvalidStrategy)
+			}
+			if current.outRangePending {
+				return Strategy{}, fmt.Errorf("%w: apply --out-range to an action before changing it", ErrInvalidStrategy)
+			}
+			current.outRange, current.outRangePending = input, true
 		case "--payload":
 			if current.Circular != nil && current.inRange != circularVariantRange {
 				return Strategy{}, bad
@@ -133,6 +145,7 @@ func parseNative(id, text string) (Strategy, error) {
 				if current.Payload != HTTPRequest || current.inRange != "" || len(current.HTTPActions) == 2 {
 					return Strategy{}, bad
 				}
+				action.OutRange, current.outRangePending = current.outRange, false
 				current.HTTPActions = append(current.HTTPActions, action)
 				continue
 			}
@@ -140,6 +153,9 @@ func parseNative(id, text string) (Strategy, error) {
 				return Strategy{}, bad
 			}
 			if fails, ok := strings.CutPrefix(input, "circular:fails="); input == "circular" || ok {
+				if current.seen["--out-range"] {
+					return Strategy{}, fmt.Errorf("%w: --out-range is not qualified for Circular's return-path action", ErrInvalidStrategy)
+				}
 				if current.inRange != circularObserveRange() || current.seen["--payload"] {
 					return Strategy{}, fmt.Errorf("%w: Circular requires --in-range=%s before its action, then --in-range=%s and --payload before its variants",
 						ErrInvalidStrategy, circularObserveRange(), circularVariantRange)
@@ -178,6 +194,7 @@ func parseNative(id, text string) (Strategy, error) {
 			} else {
 				return Strategy{}, bad
 			}
+			current.OutRange, current.outRangePending = current.outRange, false
 		default:
 			if current.Lists == nil {
 				current.Lists = new(NativeLists)
@@ -266,7 +283,7 @@ func FormatNative(value Strategy) (string, error) {
 		if profile.QUICBlobRef != "" {
 			blob = nativeBlobRefPrefix + profile.QUICBlobRef
 		}
-		for _, arg := range profile.actionArgs(blob) {
+		for _, arg := range profile.appendActions(nil, blob, "") {
 			fmt.Fprintln(&text, arg)
 		}
 	}

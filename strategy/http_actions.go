@@ -5,8 +5,9 @@ import "strings"
 // HTTPAction selects a pinned outbound-only header transform. The name is not
 // a general Lua function reference, and the spelling cannot change the header.
 type HTTPAction struct {
-	Name  string `json:"name"`
-	Spell string `json:"spell,omitempty"`
+	Name     string `json:"name"`
+	Spell    string `json:"spell,omitempty"`
+	OutRange string `json:"outRange,omitempty"`
 }
 
 const (

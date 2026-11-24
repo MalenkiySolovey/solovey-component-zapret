@@ -11,6 +11,7 @@ export default { zapretCatalog: {
   tcpAction: 'TCP action', circularFailures: 'Failures before rotation', circularSplits: 'Split bytes (ordered)',
   httpTransforms: 'HTTP header transforms', httpOrder: 'HTTP actions (execution order)', httpSpell: 'Host header spelling',
   httpDomainCase: 'Host value case', httpHostCase: 'Host header case', httpReverse: 'Reverse HTTP action order',
+  outRange: 'Outgoing action range',
   passive: 'No transformation', moveUp: 'Move profile up', moveDown: 'Move profile down', removeProfile: 'Remove profile', addProfile: 'Add profile',
   nativeLists: 'Native filters', hostList: 'Include domains', hostListExclude: 'Exclude domains',
   ipSet: 'Include IP addresses or prefixes', ipSetExclude: 'Exclude IP addresses or prefixes',

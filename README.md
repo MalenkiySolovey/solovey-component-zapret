@@ -37,6 +37,14 @@ requires an already-admitted return path before producing Circular arguments;
 the installed outgoing-only profile still rejects activation. Native options
 and the visual editor both preserve variant order and the reply observation
 window. Arbitrary Lua and external file references remain unsupported.
+Static split, QUIC and ordered HTTP actions support native `--out-range`.
+Use `a` (always), `x` (never), or a range such as `-d3`, `n2<n8`, or `b100-`.
+Counters are packets (`n`), data packets (`d`), bytes (`b`), and, on TCP,
+relative sequence start (`s`) or end (`p`). `-` includes the upper bound;
+`<` excludes it. In native text a range affects subsequent actions until
+overridden or a new profile starts. Visual editing stores it per action.
+Ranges do not alter admitted ports or add return capture. Restricted ranges
+do not count toward unconditional built-in QUIC DNS coverage.
 Selected bindings with distinct Planner marks share one native argument list.
 Its byte budget includes argument overhead and leaves room for the installed
 broker's fixed launcher arguments and environment.
