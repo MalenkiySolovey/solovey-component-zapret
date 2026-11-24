@@ -29,6 +29,9 @@ filters. The bounded QUIC Initial action defaults to the upstream built-in
 blob. A consumer still needs installed broker
 and Network Planner admission for the requested packet scope. Native Circular
 requires return observation, which the installed outgoing-only profile rejects.
+Selected bindings with distinct Planner marks share one native argument list.
+Its byte budget includes argument overhead and leaves room for the installed
+broker's fixed launcher arguments and environment.
 
 Native host and IP include/exclude fields accept inline values or one named
 list of the same kind per field. The Strategy catalog stores the shared lists;

@@ -8,6 +8,7 @@ import (
 )
 
 const nativeTracePrefix = "SOLOVEY_ZAPRET_MATCH_V1 "
+const maxTraceSlotLength = len("2147483647/2147483647")
 
 // Only compiler-generated slots reach this action. It reads no packet data,
 // returns no verdict, and writes at most once per slot per engine generation.
@@ -28,18 +29,22 @@ end`
 // no engine messages, packet contents, or verdicts, only known profile IDs.
 type NativeTrace struct {
 	mu       sync.Mutex
-	profiles [maxBindings][]string
-	matched  [maxBindings]uint16
-	line     [len(nativeTracePrefix) + 4]byte
+	bindings [][]profileMatch
+	line     [len(nativeTracePrefix) + maxTraceSlotLength]byte
 	length   int // len(line)+1 means discard the oversized line until newline
 }
 
+type profileMatch struct {
+	id      string
+	matched bool
+}
+
 func newNativeTrace(verified []Strategy) *NativeTrace {
-	trace := new(NativeTrace)
+	trace := &NativeTrace{bindings: make([][]profileMatch, len(verified))}
 	for i, binding := range verified {
-		trace.profiles[i] = make([]string, len(binding.Profiles))
+		trace.bindings[i] = make([]profileMatch, len(binding.Profiles))
 		for j, profile := range binding.Profiles {
-			trace.profiles[i][j] = profile.ID
+			trace.bindings[i][j].id = profile.ID
 		}
 	}
 	return trace
@@ -59,8 +64,8 @@ func (t *NativeTrace) Write(data []byte) (int, error) {
 		if end {
 			if t.length <= len(t.line) {
 				b, p, ok := parseNativeTrace(string(t.line[:t.length]))
-				if ok && p <= len(t.profiles[b-1]) {
-					t.matched[b-1] |= 1 << (p - 1)
+				if ok && b <= len(t.bindings) && p <= len(t.bindings[b-1]) {
+					t.bindings[b-1][p-1].matched = true
 				}
 			}
 			t.length = 0
@@ -73,15 +78,15 @@ func (t *NativeTrace) Write(data []byte) (int, error) {
 // MatchedProfiles returns distinct observations for a zero-based binding, in
 // native profile order. The caller receives a copy of the observed IDs.
 func (t *NativeTrace) MatchedProfiles(binding int) []string {
-	if binding < 0 || binding >= maxBindings {
+	if binding < 0 || binding >= len(t.bindings) {
 		return nil
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	var result []string
-	for i, id := range t.profiles[binding] {
-		if t.matched[binding]&(1<<i) != 0 {
-			result = append(result, id)
+	for _, profile := range t.bindings[binding] {
+		if profile.matched {
+			result = append(result, profile.id)
 		}
 	}
 	return result
@@ -89,7 +94,7 @@ func (t *NativeTrace) MatchedProfiles(binding int) []string {
 
 func parseNativeTrace(line string) (binding, profile int, ok bool) {
 	slot, ok := strings.CutPrefix(line, nativeTracePrefix)
-	if !ok || len(slot) < 3 || len(slot) > 4 {
+	if !ok || len(slot) < 3 || len(slot) > maxTraceSlotLength {
 		return 0, 0, false
 	}
 	a, b, ok := strings.Cut(slot, "/")
@@ -98,7 +103,7 @@ func parseNativeTrace(line string) (binding, profile int, ok bool) {
 	}
 	binding, first := strconv.Atoi(a)
 	profile, second := strconv.Atoi(b)
-	if first != nil || second != nil || binding < 1 || binding > maxBindings || profile < 1 || profile > maxProfiles ||
+	if first != nil || second != nil || binding < 1 || profile < 1 ||
 		strconv.Itoa(binding) != a || strconv.Itoa(profile) != b {
 		return 0, 0, false
 	}
