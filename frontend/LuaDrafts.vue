@@ -161,7 +161,7 @@ function readFile(event: Event) {
     try { form.draft.source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer()) }
     catch { throw new Error(t('zapretCatalog.lua.fileType')) }
     form.file = file.name
-    if (!form.id) form.id = file.name.slice(0, -4).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 64).replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '')
+    if (!form.id) form.id = file.name.slice(0, -4).toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 64).replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '')
   })
 }
 function downloadSource(id: string, source: string) {
