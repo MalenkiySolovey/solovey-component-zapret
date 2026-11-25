@@ -147,7 +147,7 @@
       <v-table v-else density="compact" class="runtime-table border rounded-lg">
         <thead><tr><th>{{ t('zapretCatalog.egress') }}</th><th>{{ t('zapretCatalog.strategy') }}</th><th>{{ t('zapretCatalog.status') }}</th><th>{{ t('zapretCatalog.diagnostics') }}</th></tr></thead>
         <tbody>
-          <tr v-for="ref in view.references" :key="ref.outboundRef">
+          <tr v-for="ref in view.references" :key="ref.outboundRef" :aria-current="route.query.binding === ref.outboundRef ? 'true' : undefined">
             <td class="text-break runtime-name">{{ ref.outboundRef }}</td>
             <td class="text-break runtime-name">{{ view.catalog.records[ref.strategyRef]?.name ?? ref.strategyRef }}</td>
             <td class="py-2">
@@ -168,6 +168,9 @@
             <td>
               <div class="d-flex">
                 <v-btn icon="mdi-pulse" size="small" variant="text" :title="t('zapretCatalog.diagnostic')" :aria-label="t('zapretCatalog.diagnostic')" :disabled="busy || ref.state !== 'applied'" @click="runDiagnostic(ref)" />
+                <v-btn v-if="ref.state === 'applied' && ref.appliedRevision && router.hasRoute('component.blockcheck')"
+                  icon="mdi-lan-check" size="small" variant="text" title="BlockCheck" aria-label="BlockCheck"
+                  :to="{ ...hostRoute('component.blockcheck'), query: { outbound: ref.outboundRef, zapret: ref.strategyRef } }" />
                 <v-btn icon="mdi-content-copy" size="small" variant="text" :title="t('zapretCatalog.copyEvidence')" :aria-label="t('zapretCatalog.copyEvidence')" :disabled="busy" @click="copyEvidence(ref)" />
               </div>
             </td>
@@ -339,7 +342,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import LuaDrafts from './LuaDrafts.vue'
 import PresetReview from './PresetReview.vue'
 import PresetOriginDetails from './PresetOriginDetails.vue'
@@ -347,6 +350,7 @@ import { catalogError, diagnose, draftToSave, exportRecord, loadCatalog, presetB
 
 const { t, te } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const hostID = computed(() => typeof route.params.hostId === 'string' ? route.params.hostId : 'local')
 const hostLabel = computed(() => hostID.value === 'local' ? t('zapretCatalog.localHost') : hostID.value)
 const hostRoute = (name: string) => ({ name, params: { hostId: hostID.value } })
@@ -371,6 +375,9 @@ const favoritesOnly = ref(false)
 const favorites = ref<string[]>([])
 const deleteRecord = ref<StrategyRecord>()
 const editing = ref(false)
+watch(() => route.query.binding, binding => {
+  if (!editing.value && typeof binding === 'string' && binding.length > 0) section.value = 'runtime'
+}, { immediate: true })
 const activeID = ref('')
 const activeOrigin = computed(() => view.value?.catalog.records[activeID.value]?.origin)
 const editorRevision = ref('')
