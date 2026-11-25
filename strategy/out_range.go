@@ -56,7 +56,7 @@ func (p *Profile) sealOutRanges() error {
 	}
 	var err error
 	protocol := p.Protocol
-	if p.Pass && len(p.UDPPorts) != 0 {
+	if p.Pass && hasPorts(p.UDPPorts, p.UDPRanges) {
 		protocol = intent.PacketProtocolUDP
 	}
 	if p.OutRange, err = sealOutRange(p.OutRange, protocol); err != nil {

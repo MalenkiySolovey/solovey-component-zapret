@@ -9,6 +9,7 @@ export type LuaDraftView = { revision: string; drafts: Record<string, LuaDraft> 
 export type ProfileListRefs = Partial<Record<NativeListField, string>>
 export type ListRefs = Record<string, ProfileListRefs>
 export type HTTPAction = { name: 'http_domcase' | 'http_hostcase'; spell?: string; outRange?: string }
+export type PortInterval = { first: number; last: number }
 export type PresetOrigin = { format: string; version: number; engine: string; fileName?: string; sha256: string;
   templateId?: string; referenceVersion?: string; referenceCommit?: string }
 
@@ -16,8 +17,10 @@ export interface Profile {
   id: string
   protocol: 'tcp' | 'udp'
   family?: 'ipv4' | 'ipv6'
-  ports: number[]
+  ports: number[] | null
   udpPorts?: number[]
+  portRanges?: PortInterval[]
+  udpPortRanges?: PortInterval[]
   payload?: 'tls_client_hello' | 'http_req' | 'quic_initial'
   splitAt?: number
   circular?: { failures: number; splits: number[] }
@@ -27,9 +30,14 @@ export interface Profile {
   outRange?: string
   lists?: Partial<Record<NativeListField, string[]>>
 }
-export function profilePorts(profile: Pick<Profile, 'protocol' | 'ports' | 'udpPorts'>): string {
-  const primary = `${profile.protocol.toUpperCase()} ${profile.ports.join(', ')}`
-  return profile.udpPorts?.length ? `${primary} / UDP ${profile.udpPorts.join(', ')}` : primary
+export function portText(ports: number[] | null | undefined, ranges: PortInterval[] | undefined, separator = ','): string {
+  return ranges?.length ? ranges.map(({ first, last }) => first === last ? String(first) : `${first}-${last}`).join(separator)
+    : ports?.join(separator) ?? ''
+}
+export function profilePorts(profile: Pick<Profile, 'protocol' | 'ports' | 'udpPorts' | 'portRanges' | 'udpPortRanges'>): string {
+  const primary = `${profile.protocol.toUpperCase()} ${portText(profile.ports, profile.portRanges, ', ')}`
+  const udp = portText(profile.udpPorts, profile.udpPortRanges, ', ')
+  return udp ? `${primary} / UDP ${udp}` : primary
 }
 export interface StrategyRecord {
   name: string

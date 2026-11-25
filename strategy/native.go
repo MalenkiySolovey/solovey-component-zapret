@@ -20,10 +20,6 @@ func nativeTextBudgetError(used int) error {
 	return fmt.Errorf("%w: native text requires at least %d bytes; limit is %d bytes", ErrInvalidStrategy, used, MaxNativeBytes)
 }
 
-func portScopeBudgetError(protocol intent.PacketProtocol, used int) error {
-	return fmt.Errorf("%w: %s scope needs %d explicit ports; the Host admits at most %d per protocol", ErrInvalidStrategy, protocol, used, maxAdmittedPorts)
-}
-
 // ParseNative accepts only bounded native profile fields. Raw text is an
 // editor input, never runnable engine argv.
 // The caller can retain text unchanged for a lossless raw round trip.
@@ -118,11 +114,11 @@ func parseNative(id, text string) (Strategy, error) {
 			}
 			switch {
 			case current.Protocol == "":
-				current.Protocol, current.Ports = protocol, ports
+				current.Protocol, current.PortRanges = protocol, ports
 			case protocol == intent.PacketProtocolTCP:
-				current.Protocol, current.Ports, current.UDPPorts = protocol, ports, current.Ports
+				current.Protocol, current.PortRanges, current.UDPRanges = protocol, ports, current.PortRanges
 			default:
-				current.UDPPorts = ports
+				current.UDPRanges = ports
 			}
 		case "--filter-l7":
 			if !validNativeSelector(input, nativeL7Names) {
@@ -235,8 +231,8 @@ func parseNative(id, text string) (Strategy, error) {
 	return value, nil
 }
 
-func parseNativePorts(input string, protocol intent.PacketProtocol) ([]uint16, error) {
-	var ports []uint16
+func parseNativePorts(input string, protocol intent.PacketProtocol) ([]intent.PortInterval, error) {
+	var ports []intent.PortInterval
 	for field := range strings.SplitSeq(input, ",") {
 		first, last, ranged := strings.Cut(field, "-")
 		if !ranged {
@@ -247,40 +243,33 @@ func parseNativePorts(input string, protocol intent.PacketProtocol) ([]uint16, e
 		if lowErr != nil || highErr != nil || low == 0 || high < low {
 			return nil, fmt.Errorf("%w: %s filter requires positive port numbers or inclusive ranges", ErrInvalidStrategy, protocol)
 		}
-		if needed := len(ports) + int(high-low) + 1; needed > maxAdmittedPorts {
-			return nil, portScopeBudgetError(protocol, needed)
-		}
-		for port := low; port <= high; port++ {
-			ports = append(ports, uint16(port))
-		}
+		ports = append(ports, intent.PortInterval{First: uint16(low), Last: uint16(high)})
 	}
 	return ports, nil
 }
 
-func nativePortList(ports []uint16) string {
+func nativePortList(ports []uint16, ranges []intent.PortInterval) string {
+	if len(ranges) == 0 {
+		ranges, _ = intent.CanonicalPortIntervals(ports)
+	}
 	var text strings.Builder
-	for i := 0; i < len(ports); {
+	for i, r := range ranges {
 		if i != 0 {
 			text.WriteByte(',')
 		}
-		end := i + 1
-		for end < len(ports) && int(ports[end]) == int(ports[end-1])+1 {
-			end++
-		}
-		text.WriteString(strconv.Itoa(int(ports[i])))
-		if end > i+1 {
+		text.WriteString(strconv.Itoa(int(r.First)))
+		if r.Last != r.First {
 			text.WriteByte('-')
-			text.WriteString(strconv.Itoa(int(ports[end-1])))
+			text.WriteString(strconv.Itoa(int(r.Last)))
 		}
-		i = end
 	}
 	return text.String()
 }
 
 func (p Profile) appendPortFilters(args []string) []string {
-	args = append(args, "--filter-"+string(p.Protocol)+"="+nativePortList(p.Ports))
-	if len(p.UDPPorts) != 0 {
-		args = append(args, "--filter-udp="+nativePortList(p.UDPPorts))
+	args = append(args, "--filter-"+string(p.Protocol)+"="+nativePortList(p.Ports, p.PortRanges))
+	if hasPorts(p.UDPPorts, p.UDPRanges) {
+		args = append(args, "--filter-udp="+nativePortList(p.UDPPorts, p.UDPRanges))
 	}
 	return args
 }

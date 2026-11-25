@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/MalenkiySolovey/solovey-host/network/intent"
 )
 
 func rangedProfileFixture() string {
@@ -44,20 +46,38 @@ func TestNativeRangesPreserveSourceProfileOrderAndExactPorts(t *testing.T) {
 	}
 }
 
-func TestNativeRangesRejectUnboundedInvalidAndCombinedOverflow(t *testing.T) {
-	for _, input := range []string{"*", "~443", "0-2", "443-42", "65535-65536", "443-444-445", "443,", "440-443,443"} {
+func TestNativeRangesRejectUnboundedOrMalformedPorts(t *testing.T) {
+	for _, input := range []string{"*", "~443", "0-2", "443-42", "65535-65536", "443-444-445", "443,"} {
 		if _, err := ParseNative("fixture", "--filter-tcp="+input); !errors.Is(err, ErrInvalidStrategy) {
 			t.Errorf("accepted invalid or ambiguous port filter %q: %v", input, err)
 		}
 	}
-	const full = "--filter-udp=100-163"
-	if _, err := ParseNative("fixture", full); err != nil {
+}
+
+func TestWideNativeRangesStayCompactAcrossParsingAndScope(t *testing.T) {
+	raw := "--filter-tcp=8080-65535 --filter-udp=100-164 --new --filter-udp=164-200"
+	record, err := SealDraft(Draft{ID: "wide", Name: "Wide ranges", Raw: &raw})
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, input := range []string{"--filter-udp=100-164", full + " --new --filter-udp=164", "--filter-tcp=443 " + full + " --new --filter-udp=164"} {
-		if _, err := ParseNative("fixture", input); err == nil || !strings.Contains(err.Error(), "Host admits at most 64") {
-			t.Errorf("port budget diagnostic missing for %q: %v", input, err)
-		}
+	value := record.Definition
+	scope, err := value.PacketScope()
+	if err != nil || len(scope.TCP) != 0 || len(scope.UDP) != 0 ||
+		!slices.Equal(scope.TCPRanges, []intent.PortInterval{{First: 8080, Last: 65535}}) ||
+		!slices.Equal(scope.UDPRanges, []intent.PortInterval{{First: 100, Last: 200}}) {
+		t.Fatalf("mixed scope expanded or gained ports: %+v: %v", scope, err)
+	}
+	argv, err := value.Compile("/opt/zapret2", 401, 0x120000, 0x40000000)
+	if err != nil || !slices.Contains(argv, "--filter-tcp=8080-65535") || !slices.Contains(argv, "--filter-udp=100-164") {
+		t.Fatalf("lost compact per-profile filter: %v: %v", argv, err)
+	}
+	visual, err := SealDraft(Draft{ID: "wide", Name: record.Name, Profiles: value.Profiles})
+	if err != nil || visual.Definition.Revision != value.Revision {
+		t.Fatalf("visual roundtrip changed a wide range: %v", err)
+	}
+	transfer, err := record.Export().Import()
+	if err != nil || transfer.Raw == nil || *transfer.Raw != raw {
+		t.Fatalf("export lost the original wide filters: %v", err)
 	}
 }
 

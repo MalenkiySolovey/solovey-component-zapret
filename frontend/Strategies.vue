@@ -346,7 +346,7 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vu
 import LuaDrafts from './LuaDrafts.vue'
 import PresetReview from './PresetReview.vue'
 import PresetOriginDetails from './PresetOriginDetails.vue'
-import { catalogError, diagnose, draftToSave, exportRecord, loadCatalog, presetBytes, preview, saveCatalog, type CatalogView, type ExportFormat, type HTTPAction, type ListKind, type ListRefs, type NamedList, type NativeListField, type PresetTemplate, type Profile, type ProfileListRefs, type StrategyRecord, type StrategyReference } from './catalog'
+import { catalogError, diagnose, draftToSave, exportRecord, loadCatalog, portText, presetBytes, preview, saveCatalog, type CatalogView, type ExportFormat, type HTTPAction, type ListKind, type ListRefs, type NamedList, type NativeListField, type PortInterval, type PresetTemplate, type Profile, type ProfileListRefs, type StrategyRecord, type StrategyReference } from './catalog'
 
 const { t, te } = useI18n()
 const route = useRoute()
@@ -414,7 +414,7 @@ const appliedCount = computed(() => view.value?.references.filter(ref => ref.sta
 const unverifiedCount = computed(() => view.value?.references.filter(ref => ref.state === 'blocked').length ?? 0)
 const stateColors: Record<StrategyReference['state'], string | undefined> = { applied: 'success', pending: 'warning', blocked: 'warning', off: undefined }
 const matches = (term: string | null, ...values: string[]) => values.some(value => value.toLocaleLowerCase().includes(term?.trim().toLocaleLowerCase() ?? ''))
-const profileTransports = (profile: Profile) => profile.udpPorts?.length ? ['tcp', 'udp'] : [profile.protocol]
+const profileTransports = (profile: Profile) => profile.udpPorts?.length || profile.udpPortRanges?.length ? ['tcp', 'udp'] : [profile.protocol]
 const filteredRecords = computed(() => records.value.filter(record => matches(search.value, record.name, record.definition.id,
   ...record.definition.profiles.flatMap(profile => [profile.id, ...profileTransports(profile), profile.payload ?? '']))))
 const filteredLists = computed(() => namedLists.value.filter(([id, list]) => matches(assetSearch.value, id, t(`zapretCatalog.${list.kind}Kind`), ...list.entries)))
@@ -505,8 +505,9 @@ function withRows(record?: StrategyRecord) {
     const refs = { ...rawRefs.value[p.id] }
     const lists = listText(p.lists)
     for (const field of listFields) if (refs[field]) lists[field] = ''
-    return { key: ++rowKey, id: p.id, protocol: p.udpPorts?.length ? 'tcp+udp' : p.protocol, family: p.family ?? '',
-      ports: p.ports.join(','), udpPorts: p.udpPorts?.join(',') ?? '',
+    const udpPorts = portText(p.udpPorts, p.udpPortRanges)
+    return { key: ++rowKey, id: p.id, protocol: udpPorts ? 'tcp+udp' : p.protocol, family: p.family ?? '',
+      ports: portText(p.ports, p.portRanges), udpPorts,
       payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9), quicRepeats: String(p.quicRepeats ?? 1), quicBlobRef: p.quicBlobRef ?? '',
       outRange: p.outRange ?? '', rangeInitiallyOpen: !!p.outRange || p.httpActions?.some(action => !!action.outRange),
       ...(p.circular ? { circular: { failures: String(p.circular.failures), splits: p.circular.splits.join(',') } } : {}),
@@ -629,8 +630,8 @@ function draft() {
       const entries = row.lists[field].split(/[\s,]+/).filter(Boolean)
       if (entries.length) lists[field] = entries
     }
-    return { id: row.id.trim(), protocol: row.protocol === 'udp' ? 'udp' : 'tcp', ports: parsePorts(row.ports),
-      ...(row.protocol === 'tcp+udp' ? { udpPorts: parsePorts(row.udpPorts) } : {}),
+    return { id: row.id.trim(), protocol: row.protocol === 'udp' ? 'udp' : 'tcp', ports: null, portRanges: parsePorts(row.ports),
+      ...(row.protocol === 'tcp+udp' ? { udpPortRanges: parsePorts(row.udpPorts) } : {}),
       ...(row.payload && !row.circular && !row.httpActions && row.outRange ? { outRange: row.outRange } : {}),
       ...(row.family ? { family: row.family } : {}), ...(row.payload === 'quic_initial' ? { payload: row.payload, quicRepeats: Number(row.quicRepeats),
         ...(row.quicBlobRef ? { quicBlobRef: row.quicBlobRef } : {}) }
@@ -642,16 +643,13 @@ function draft() {
   return draftToSave(name.value.trim(), '', profiles, true, refs)
 }
 function parsePorts(input: string) {
-  const ports: number[] = []
-  for (const term of input.split(',')) {
+  return input.split(',').map<PortInterval>(term => {
     const field = /^(\d{1,5})(?:-(\d{1,5}))?$/.exec(term.trim())
     const first = Number(field?.[1] ?? 0)
     const last = Number(field?.[2] ?? first)
     if (first < 1 || last < first || last > 65535) throw new Error(t('zapretCatalog.portSyntax'))
-    if (ports.length + last - first + 1 > 64) throw new Error(t('zapretCatalog.portBudget'))
-    for (let port = first; port <= last; port++) ports.push(port)
-  }
-  return ports
+    return { first, last }
+  })
 }
 const previewDraft = () => preview({ ...draft(), name: name.value.trim() || 'Preview' }, editorRevision.value)
 const validateDraft = () => run(async () => {
