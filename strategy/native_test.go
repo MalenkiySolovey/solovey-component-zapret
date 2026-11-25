@@ -120,6 +120,64 @@ func TestNativeDualTransportL7DoesNotShadowQUIC(t *testing.T) {
 	}
 }
 
+const nativePassiveFixture = "--name=observe\n--filter-tcp=18080\n--filter-udp=18443\n--filter-l7=http,dns\n" +
+	"--payload=http_req,dns_query\n--out-range=-d3\n--lua-desync=pass\n--new=other\n--filter-tcp=18080\n--filter-l7=unknown\n"
+
+func TestNativePassivePresetAndPassRoundTrip(t *testing.T) {
+	input := PresetInput{Format: "native", Content: []byte(nativePassiveFixture)}
+	catalog, review, err := emptyPresetCatalog().PreparePreset("fixture", input)
+	if err != nil || review.Record == nil || review.Record.VisualEditable() || review.Record.Raw != nativePassiveFixture {
+		t.Fatalf("pass and independent L7 selection must be lossless native options: %v, %+v", err, review)
+	}
+	value := review.Record.Definition
+	if !value.Profiles[0].Pass || value.Profiles[0].Payload != "http_req,dns_query" || value.Profiles[1].Pass || value.Profiles[1].L7Filter != "unknown" {
+		t.Fatalf("native pass/selection lost: %+v", value.Profiles)
+	}
+	argv, err := value.Compile("/opt/zapret2", 401, 0x120000, 0x40000000)
+	want := "--filter-tcp=18080 --filter-udp=18443 --filter-l7=http,dns --payload=http_req,dns_query --out-range=-d3 --lua-desync=pass " +
+		"--new=other --filter-mark=0x120000/0xffffffff --filter-tcp=18080 --filter-l7=unknown"
+	if err != nil || !strings.HasSuffix(strings.Join(argv, " "), want) {
+		t.Fatalf("native selection, filter or action was not preserved in engine argv: %v, %v", argv, err)
+	}
+	data, err := catalog.ExportPackage("fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, restored, err := emptyPresetCatalog().PreparePreset("fixture", PresetInput{Format: "zip", Content: data})
+	if err != nil || restored.Record == nil || restored.Record.Raw != nativePassiveFixture || restored.Record.Definition.Revision != value.Revision {
+		t.Fatalf("sealed ZIP did not preserve the native profile: %v, %+v", err, restored)
+	}
+}
+
+func TestNativePassiveL7CoverageAndActionOrder(t *testing.T) {
+	const later = " --new=quic --filter-udp=853 --filter-l7=quic --payload=quic_initial --lua-desync=fake:blob=fake_default_quic:repeats=1"
+	for _, tc := range []struct {
+		filter string
+		covers bool
+	}{
+		{"--filter-l7=http,tls", true},
+		{"--filter-l7=dns --lua-desync=pass", true},
+		{"--filter-l7=quic --payload=http_req --lua-desync=pass", false},
+		{"--filter-l7=known", false},
+		{"--filter-l7=unknown", false},
+		{"--filter-l7=all", false},
+	} {
+		value, err := ParseNative("fixture", "--filter-udp=853 "+tc.filter+later)
+		if err != nil || value.HandlesQUIC(IPv4, 853) != tc.covers {
+			t.Errorf("incorrect QUIC coverage with %q: want %v, %v", tc.filter, tc.covers, err)
+		}
+	}
+	for _, bad := range []string{
+		"--filter-l7=http,unrecognized", "--payload=dns_query", "--lua-desync=pass --payload=http_req",
+		"--payload=unrecognized --lua-desync=pass", "--lua-desync=pass --lua-desync=pass", "--lua-desync=pass:unexpected=1",
+		"--filter-l7=http,tls --payload=tls_client_hello --lua-desync=multisplit:pos=9",
+	} {
+		if _, err := ParseNative("fixture", "--filter-tcp=443 "+bad); !errors.Is(err, ErrInvalidStrategy) {
+			t.Errorf("accepted invalid or unrepresented native action syntax %q: %v", bad, err)
+		}
+	}
+}
+
 func TestNativeSingleTransportRevisionsUnchanged(t *testing.T) {
 	for _, tc := range []struct{ filter, legacy string }{
 		{"--filter-tcp=443", "1cb5e0caa34931049ac5e219168ceb26f342a3663ccd65efa35b4f7710b99656"},
@@ -309,7 +367,7 @@ func TestNativeProfileRejectsExecutorAndAuthorityOptions(t *testing.T) {
 		"--filter-tcp=443 --filter-l7=quic --payload=quic_initial --lua-desync=fake:blob=fake_default_quic:repeats=1",
 		"--filter-udp=443 --filter-l7=tls --payload=tls_client_hello --lua-desync=multisplit:pos=9",
 		"--filter-tcp=443 --filter-tcp=80",
-		"--filter-tcp=443 --filter-l7=tls",
+		"--filter-tcp=443 --filter-l7=tls,unknown-proto",
 		"--filter-tcp=443 --filter-l7=http --payload=tls_client_hello --lua-desync=multisplit:pos=9",
 		"--filter-tcp=443 --filter-l7=tls --payload=tls_client_hello --lua-desync=multisplit:pos=9:extra=1",
 		"--filter-tcp=443 --new",

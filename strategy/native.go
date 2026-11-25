@@ -58,11 +58,13 @@ func parseNative(id, text string) (Strategy, error) {
 		if current.outRangePending {
 			return fmt.Errorf("%w: --out-range needs a following action in native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
 		}
-		if current.Protocol == "" || current.seen["--payload"] != current.seen["--lua-desync"] ||
-			current.seen["--filter-l7"] != current.hasAction() ||
-			current.hasAction() && payloadProtocol(current.Payload) != current.l7 ||
+		if current.Protocol == "" || !current.Pass && current.seen["--payload"] != current.seen["--lua-desync"] ||
+			!current.Pass && current.hasAction() && (current.l7 == "" || payloadProtocol(current.Payload) != current.l7) ||
 			current.inRange != "" && current.Circular == nil {
 			return fmt.Errorf("%w: incomplete or inconsistent native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
+		}
+		if current.Pass || !current.hasAction() {
+			current.L7Filter = current.l7
 		}
 		value.Profiles = append(value.Profiles, current.Profile)
 		return nil
@@ -123,7 +125,7 @@ func parseNative(id, text string) (Strategy, error) {
 				current.UDPPorts = ports
 			}
 		case "--filter-l7":
-			if input != "tls" && input != "http" && input != "quic" {
+			if !validNativeSelector(input, nativeL7Names) {
 				return Strategy{}, bad
 			}
 			current.l7 = input
@@ -144,6 +146,9 @@ func parseNative(id, text string) (Strategy, error) {
 			}
 			current.outRange, current.outRangePending = input, true
 		case "--payload":
+			if current.Pass {
+				return Strategy{}, token.invalid(fmt.Errorf("%w: put --payload before pass; its filter is captured when the action is added", ErrInvalidStrategy))
+			}
 			if current.Circular != nil && current.inRange != circularVariantRange {
 				return Strategy{}, bad
 			}
@@ -165,6 +170,11 @@ func parseNative(id, text string) (Strategy, error) {
 			}
 			if len(current.HTTPActions) != 0 {
 				return Strategy{}, bad
+			}
+			if input == "pass" {
+				current.Pass = true
+				current.OutRange, current.outRangePending = current.outRange, false
+				continue
 			}
 			if fails, ok := strings.CutPrefix(input, "circular:fails="); input == "circular" || ok {
 				if current.seen["--out-range"] {

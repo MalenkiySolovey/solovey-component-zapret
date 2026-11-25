@@ -67,7 +67,9 @@ type Profile struct {
 	Lists       *NativeLists          `json:"lists,omitempty"`
 	Circular    *Circular             `json:"circular,omitempty"`
 	HTTPActions []HTTPAction          `json:"httpActions,omitempty"`
-	OutRange    string                `json:"outRange,omitempty"` // Outgoing filter for a single split or QUIC action.
+	OutRange    string                `json:"outRange,omitempty"` // Outgoing filter for a single split, QUIC or pass action.
+	L7Filter    string                `json:"l7Filter,omitempty"` // Independent L7 filter on a passive profile.
+	Pass        bool                  `json:"pass,omitempty"`     // The original engine's explicit no-op Lua action.
 }
 
 type Strategy struct {
@@ -201,7 +203,7 @@ func (p Profile) portsOn(protocol intent.PacketProtocol) []uint16 {
 }
 
 func (p Profile) hasAction() bool {
-	return p.SplitAt != 0 || p.QUICRepeats != 0 || p.Circular != nil || len(p.HTTPActions) != 0
+	return p.SplitAt != 0 || p.QUICRepeats != 0 || p.Circular != nil || len(p.HTTPActions) != 0 || p.Pass
 }
 
 func nativeAssets(profiles []Profile) []AssetRef {
@@ -222,7 +224,13 @@ func (p Profile) validAction() bool {
 	if p.QUICBlobRef != "" && (p.QUICRepeats == 0 || !outbounds.ValidZapretStrategyRef(p.QUICBlobRef)) {
 		return false
 	}
+	if p.L7Filter != "" && (p.hasAction() && !p.Pass || !validNativeSelector(p.L7Filter, nativeL7Names)) {
+		return false
+	}
 	switch {
+	case p.Pass:
+		return p.SplitAt == 0 && p.QUICRepeats == 0 && p.Circular == nil && len(p.HTTPActions) == 0 &&
+			(p.Payload == "" || validNativeSelector(string(p.Payload), nativePayloadNames))
 	case len(p.HTTPActions) != 0:
 		return p.Protocol == intent.PacketProtocolTCP && p.Payload == HTTPRequest && p.SplitAt == 0 && p.QUICRepeats == 0 &&
 			p.Circular == nil && validHTTPActions(p.HTTPActions)
@@ -304,7 +312,11 @@ func (value Strategy) HandlesQUIC(family AddressFamily, port uint16) bool {
 		if (p.Family == "" || p.Family == family) && slices.Contains(p.portsOn(intent.PacketProtocolUDP), port) {
 			// Typed actions emit an L7 filter for their payload. A mixed
 			// TCP/TLS or TCP/HTTP action will not match a QUIC packet.
-			if p.hasAction() && p.Payload != QUICInitial {
+			if p.Pass || !p.hasAction() {
+				if !passiveMayShadowQUIC(p.L7Filter) {
+					continue
+				}
+			} else if p.Payload != QUICInitial {
 				continue
 			}
 			if p.QUICRepeats == 0 || p.QUICBlobRef != "" || p.OutRange != "" {
@@ -470,6 +482,15 @@ func payloadProtocol(value Payload) string {
 }
 
 func (p Profile) appendActions(args []string, blob, observation string) []string {
+	if p.L7Filter != "" {
+		args = append(args, "--filter-l7="+p.L7Filter)
+	}
+	if p.Pass {
+		if p.Payload != "" {
+			args = append(args, "--payload="+string(p.Payload))
+		}
+		args = append(appendOutRange(args, "", p.OutRange), "--lua-desync=pass")
+	}
 	if len(p.HTTPActions) != 0 {
 		args = append(args, "--filter-l7=http", "--payload="+string(HTTPRequest))
 		var current string

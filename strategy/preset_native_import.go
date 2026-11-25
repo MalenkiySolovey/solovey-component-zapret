@@ -163,7 +163,7 @@ func (p *nativePresetPlan) profile(tokens []sourceToken) {
 		if key == "--payload" {
 			payloadSeen = true
 		}
-		if key == "--lua-desync" && !payloadSeen && value != "circular" && !strings.HasPrefix(value, "circular:fails=") {
+		if key == "--lua-desync" && !payloadSeen && value != "pass" && value != "circular" && !strings.HasPrefix(value, "circular:fails=") {
 			p.preview.issue(&token, "payload-order", "the engine snapshots payload at each action; put the intended payload before the action")
 		}
 		switch {
@@ -205,17 +205,17 @@ func (p *nativePresetPlan) checkProfileOption(token sourceToken, key, value stri
 			reason = err.Error()
 		}
 	case "--filter-l7":
-		if value != "tls" && value != "http" && value != "quic" {
-			reason = "only a single TLS, HTTP or QUIC protocol filter is admitted"
+		if !validNativeSelector(value, nativeL7Names) {
+			reason = "use comma-separated L7 protocol names from the pinned engine"
 		}
 	case "--payload":
-		if payloadProtocol(Payload(value)) == "" {
-			reason = "only a single TLS ClientHello, HTTP request or QUIC Initial payload is admitted"
+		if !validNativeSelector(value, nativePayloadNames) {
+			reason = "use comma-separated native payload names from the pinned engine"
 		}
 	case "--lua-desync":
 		action, _, _ := strings.Cut(value, ":")
 		switch action {
-		case "multisplit", "circular", "http_domcase", "http_hostcase", "fake":
+		case "multisplit", "circular", "http_domcase", "http_hostcase", "fake", "pass":
 			// The owner parser checks action parameters and prior filters.
 		default:
 			reason = "this action is outside the admitted typed subset; engine or Windows preset availability is not Solovey support"

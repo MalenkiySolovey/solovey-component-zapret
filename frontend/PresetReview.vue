@@ -138,8 +138,9 @@ const review = () => run(async () => {
     if (selected && selected.size > max) throw new Error(t('zapretCatalog.importTooLarge', { max: max / 1024 }))
     const content = selected ? new Uint8Array(await selected.arrayBuffer()) : new TextEncoder().encode(native.value)
     if (content.length > max) throw new Error(t('zapretCatalog.importTooLarge', { max: max / 1024 }))
+    const overrides = Object.entries(dependencyIDs.value).map(([path, id]) => ({ path, id }))
     input = { format, name: label || (format === 'native' ? selected?.name.replace(/\.[^.]+$/, '') : undefined), content: encodePresetBytes(content),
-      ...(format === 'zip' && Object.keys(dependencyIDs.value).length ? { dependencyIds: { ...dependencyIDs.value } } : {}) }
+      ...(format === 'zip' && overrides.length ? { dependencyIds: overrides } : {}) }
   }
   result.value = await reviewPreset(input, props.revision)
   reviewed.value = input

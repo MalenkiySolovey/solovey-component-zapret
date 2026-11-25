@@ -66,7 +66,7 @@ export interface PresetTemplate {
   origin: string; version: string; commit: string; sourcePath: string; license: string
 }
 export type PresetFormat = 'template' | 'native' | 'json' | 'zip'
-export type PresetInput = { format: PresetFormat; name?: string; templateId?: string; content?: string; dependencyIds?: Record<string, string> }
+export type PresetInput = { format: PresetFormat; name?: string; templateId?: string; content?: string; dependencyIds?: { path: string; id: string }[] }
 export interface PresetPreview {
   source?: string
   origin?: PresetOrigin

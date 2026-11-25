@@ -106,7 +106,7 @@ func TestPresetPackageRepairsListAndBinaryConflicts(t *testing.T) {
 		}) {
 		t.Fatalf("expected actionable list and binary conflicts: %+v, %v", preview, err)
 	}
-	input.DependencyIDs = map[string]string{"lists/site.txt": "imported-list", "blobs/fixture.bin": "imported-blob"}
+	input.DependencyIDs = []PresetDependencyID{{"lists/site.txt", "imported-list"}, {"blobs/fixture.bin", "imported-blob"}}
 	next, preview, err := base.PreparePreset("imported", input)
 	if err != nil || preview.Record == nil || base.Revision() != before || next.Validate() != nil {
 		t.Fatalf("renamed assets failed to validate or modified the live catalog: %+v, %v", preview, err)
@@ -125,7 +125,7 @@ func TestPresetPackageRepairsListAndBinaryConflicts(t *testing.T) {
 	if err != nil || reviewed.Record == nil || copy.Revision() != next.Revision() {
 		t.Fatalf("ZIP round trip lost renamed IDs or binary bytes: %+v, %v", reviewed, err)
 	}
-	input.DependencyIDs["lists/not-included.txt"] = "ignored"
+	input.DependencyIDs = append(input.DependencyIDs, PresetDependencyID{"lists/not-included.txt", "ignored"})
 	if _, preview, err = base.PreparePreset("imported", input); err != nil || preview.Record != nil ||
 		!slices.ContainsFunc(preview.Issues, func(issue PresetIssue) bool { return issue.Code == "unbound-dependency-id" }) {
 		t.Fatalf("unused explicit ID was silently ignored: %+v, %v", preview, err)

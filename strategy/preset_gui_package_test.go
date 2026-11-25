@@ -109,14 +109,19 @@ func TestPresetZapretGUIRepairUsesVerifiedArchivePath(t *testing.T) {
 	base.Lists = map[string]NamedList{"local": {Kind: IPSetKind, Entries: []string{"198.51.100.0/24"}}}
 	before := base.Revision()
 	data := guiPackageFixture(t, guiFixturePreset, "standalone", nil)
-	input := PresetInput{Format: "zip", Content: data, DependencyIDs: map[string]string{"lists/local.txt": "imported-local"}}
+	input := PresetInput{Format: "zip", Content: data, DependencyIDs: []PresetDependencyID{{"lists/local.txt", "imported-local"}}}
 	next, preview, err := base.PreparePreset("imported", input)
 	if err != nil || preview.Record == nil || base.Revision() != before || preview.Origin.SHA256 != fixtureDigest(string(data)) ||
 		preview.Record.ListRefs["second"].IPSetExclude != "imported-local" ||
 		!slices.Equal(next.Lists["local"].Entries, []string{"198.51.100.0/24"}) || !slices.Equal(next.Lists["imported-local"].Entries, []string{"192.0.2.0/24"}) {
 		t.Fatalf("did not attach the verified list to only the imported record: %+v, %v", preview, err)
 	}
-	input.DependencyIDs["lists/Site hosts.txt"] = "imported-local"
+	duplicate := input
+	duplicate.DependencyIDs = append(duplicate.DependencyIDs, PresetDependencyID{"lists/local.txt", "other-id"})
+	if _, _, err := base.PreparePreset("imported", duplicate); err == nil || !strings.Contains(err.Error(), "same archive path") {
+		t.Fatalf("duplicate path overrides must not be resolved by input order: %v", err)
+	}
+	input.DependencyIDs = append(input.DependencyIDs, PresetDependencyID{"lists/Site hosts.txt", "imported-local"})
 	if _, preview, err := base.PreparePreset("imported", input); err != nil || preview.Record != nil ||
 		len(preview.Dependencies) != 2 || preview.Dependencies[1].State != "conflict" || base.Revision() != before {
 		t.Fatalf("different archive dependencies were conflated under one ID: %+v, %v", preview, err)

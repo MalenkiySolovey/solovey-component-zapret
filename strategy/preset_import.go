@@ -14,11 +14,16 @@ import (
 )
 
 type PresetInput struct {
-	Format        string            `json:"format"`
-	Name          string            `json:"name,omitempty"`
-	TemplateID    string            `json:"templateId,omitempty"`
-	Content       []byte            `json:"content,omitempty"`
-	DependencyIDs map[string]string `json:"dependencyIds,omitempty"` // ZIP entry path to explicitly chosen managed ID.
+	Format        string               `json:"format"`
+	Name          string               `json:"name,omitempty"`
+	TemplateID    string               `json:"templateId,omitempty"`
+	Content       []byte               `json:"content,omitempty"`
+	DependencyIDs []PresetDependencyID `json:"dependencyIds,omitempty"`
+}
+
+type PresetDependencyID struct {
+	Path string `json:"path"` // Exact ZIP member. It is data, not a JSON field name.
+	ID   string `json:"id"`
 }
 
 type PresetIssue struct {
@@ -71,15 +76,9 @@ func (c Catalog) PreparePreset(id string, input PresetInput) (Catalog, PresetPre
 	if len(input.Content) > MaxPresetBytes {
 		return Catalog{}, PresetPreview{}, fmt.Errorf("preset has %d bytes; import limit is %d bytes", len(input.Content), MaxPresetBytes)
 	}
-	if len(input.DependencyIDs) > 0 {
-		if input.Format != "zip" || len(input.DependencyIDs) > maxPresetEntries {
-			return Catalog{}, PresetPreview{}, errors.New("dependency IDs apply only to files in one preset archive")
-		}
-		for source, id := range input.DependencyIDs {
-			if len(source) == 0 || len(source) > len("lists/")+maxGUIFileNameBytes || !outbounds.ValidZapretStrategyRef(id) {
-				return Catalog{}, PresetPreview{}, errors.New("choose a managed dependency ID of 1 to 64 lowercase letters, digits or hyphens")
-			}
-		}
+	dependencyIDs, err := input.dependencyMap()
+	if err != nil {
+		return Catalog{}, PresetPreview{}, err
 	}
 	if input.Format == "template" && input.TemplateID != "" && len(input.Content) == 0 {
 		template, ok := findTemplate(input.TemplateID)
@@ -102,7 +101,7 @@ func (c Catalog) PreparePreset(id string, input PresetInput) (Catalog, PresetPre
 			return Catalog{}, PresetPreview{}, err
 		}
 		if _, ok := files["manifest.json"]; ok {
-			return c.prepareGUIPreset(id, input.Name, input.Content, files, input.DependencyIDs)
+			return c.prepareGUIPreset(id, input.Name, input.Content, files, dependencyIDs)
 		}
 		if encoded, ok := files["strategy.json"]; ok && len(files) == 1 {
 			if len(input.DependencyIDs) != 0 {
@@ -112,12 +111,35 @@ func (c Catalog) PreparePreset(id string, input PresetInput) (Catalog, PresetPre
 		}
 		if source, ok := files["strategy.txt"]; ok && files["strategy.json"] == nil {
 			delete(files, "strategy.txt")
-			return c.prepareNativeSource(id, input.Name, nativePresetSource{text: string(source), files: files, dependencyIDs: input.DependencyIDs})
+			return c.prepareNativeSource(id, input.Name, nativePresetSource{text: string(source), files: files, dependencyIDs: dependencyIDs})
 		}
 		return Catalog{}, PresetPreview{}, errors.New("ZIP must contain either strategy.json alone or strategy.txt with its data dependencies")
 	default:
 		return Catalog{}, PresetPreview{}, errors.New("unknown preset format")
 	}
+}
+
+func (input PresetInput) dependencyMap() (map[string]string, error) {
+	if len(input.DependencyIDs) == 0 {
+		return nil, nil
+	}
+	if input.Format != "zip" || len(input.DependencyIDs) > maxPresetEntries {
+		return nil, errors.New("dependency IDs apply only to files in one preset archive")
+	}
+	ids := make(map[string]string, len(input.DependencyIDs))
+	for _, override := range input.DependencyIDs {
+		if len(override.Path) == 0 || len(override.Path) > len("lists/")+maxGUIFileNameBytes {
+			return nil, errors.New("dependency ID override must name one preset archive member")
+		}
+		if !outbounds.ValidZapretStrategyRef(override.ID) {
+			return nil, errors.New("choose a managed dependency ID of 1 to 64 lowercase letters, digits or hyphens")
+		}
+		if _, exists := ids[override.Path]; exists {
+			return nil, fmt.Errorf("more than one managed ID was specified for the same archive path %q", override.Path)
+		}
+		ids[override.Path] = override.ID
+	}
+	return ids, nil
 }
 
 func firstName(name, fallback string) string {

@@ -32,12 +32,17 @@ type Record struct {
 	Origin     *PresetOrigin `json:"origin,omitempty"`
 }
 
-// VisualEditable reports whether regenerating the native text from the typed
-// fields would preserve the original document, including comments and layout.
+// VisualEditable reports whether the visual editor can regenerate the source
+// without losing native-only fields, comments or layout.
 func (r Record) VisualEditable() bool {
 	parsed, err := parseNative(r.Definition.ID, r.Raw)
 	if err != nil {
 		return false
+	}
+	for _, p := range parsed.Profiles {
+		if p.Pass || p.L7Filter != "" {
+			return false
+		}
 	}
 	parsed.BlobData = r.Definition.BlobData
 	formatted, err := FormatNative(parsed)

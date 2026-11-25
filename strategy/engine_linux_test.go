@@ -78,7 +78,7 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 	})
 	t.Run("managed-binary-package", func(t *testing.T) {
 		validatePresetEngine(t, root, PresetInput{Format: "zip", Content: presetBinaryFixture(t, "\xff\x00\x7f"),
-			DependencyIDs: map[string]string{"blobs/fixture.bin": "portable-blob"}})
+			DependencyIDs: []PresetDependencyID{{"blobs/fixture.bin", "portable-blob"}}})
 	})
 	t.Run("zapretgui-package", func(t *testing.T) {
 		validatePresetEngine(t, root, PresetInput{Format: "zip", Content: guiPackageFixture(t, guiFixturePreset, "standalone", nil)})
@@ -89,6 +89,9 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 	})
 	t.Run("native-dual-transport", func(t *testing.T) {
 		validatePresetEngine(t, root, PresetInput{Format: "native", Content: []byte(dualTransportFixture)})
+	})
+	t.Run("native-passive-and-pass", func(t *testing.T) {
+		validatePresetEngine(t, root, PresetInput{Format: "native", Content: []byte(nativePassiveFixture)})
 	})
 }
 

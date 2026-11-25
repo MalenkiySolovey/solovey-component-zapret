@@ -51,11 +51,15 @@ func sealOutRange(value string, protocol intent.PacketProtocol) (string, error) 
 }
 
 func (p *Profile) sealOutRanges() error {
-	if p.OutRange != "" && p.SplitAt == 0 && p.QUICRepeats == 0 {
-		return errors.New("profile outgoing range requires a split or QUIC action; set HTTP ranges on each action")
+	if p.OutRange != "" && p.SplitAt == 0 && p.QUICRepeats == 0 && !p.Pass {
+		return errors.New("profile outgoing range requires a split, QUIC or pass action; set HTTP ranges on each action")
 	}
 	var err error
-	if p.OutRange, err = sealOutRange(p.OutRange, p.Protocol); err != nil {
+	protocol := p.Protocol
+	if p.Pass && len(p.UDPPorts) != 0 {
+		protocol = intent.PacketProtocolUDP
+	}
+	if p.OutRange, err = sealOutRange(p.OutRange, protocol); err != nil {
 		return err
 	}
 	for i := range p.HTTPActions {
