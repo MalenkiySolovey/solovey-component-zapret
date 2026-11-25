@@ -28,13 +28,27 @@ The exact 136 `winws2` launch documents are Windows-specific as shipped:
 each has Windows capture options and references packaged lists, binary assets,
 and additional Lua. This is not a finding that every profile in those
 documents is Linux-incompatible. The overlapping source dependency inventory
-contains 92 list paths, 61 binary paths and eight Lua paths. Three Lua names
-also exist in the pinned original engine; that does not attest to matching
-GUI bytes. The five additional GUI Lua files and the referenced list and
-binary contents are absent from this public tag. The tagged fake catalog
-loader explicitly names a separately packaged SQLite resource. Nothing from
-that resource or a different Dev build is treated as licensed and qualified
-input to a runnable template.
+contains 92 list paths, 61 binary paths and eight Lua paths. Their bytes live
+in the distribution and are absent from the public source tree. The tagged
+fake catalog loader also names a separately packaged SQLite resource.
+
+The [stable release manifest](https://git2.zapret.moe/zapretdiscordyoutube/zapretgui/releases/tag/22.0.0.0)
+has SHA-256 `864bafffc54c034502a6256dc0e4b4bc0c61c8cfa8a61fe41703b1a82557b144`.
+Its Ed25519 signature verifies with `gui-2026a` from the frozen tag. All 161
+referenced objects matched their signed sizes and SHA-256 digests, including
+all 92 lists under `lists/base/`. The installed Dev supplied 156 matching
+objects. Five mismatches were resolved from the publisher's content store
+without running the installer or Lua. The signed `zapret-lib.lua`,
+`zapret-antidpi.lua` and `zapret-auto.lua` match the pinned Zapret2 v1.0.7
+libraries byte for byte. Solovey obtains those libraries from Zapret2.
+
+The signature establishes release provenance for the five additional GUI Lua
+files and the list and binary assets. The manifest provides no per-file
+license metadata, and redistribution rights for these additional dependencies
+remain unconfirmed. Two base lists exceed the 256 KiB Solovey catalog budget
+individually. `ipset-all.txt` is 572,927 bytes and `russia-blacklist.txt` is
+1,773,215 bytes. The frozen distribution adds no runnable originals to the
+catalog under the current runtime and transfer contracts.
 
 The running Windows Dev build inspected separately reported `21.1.7.313`
 in both the UI and executable properties, SHA-256
