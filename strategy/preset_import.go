@@ -9,13 +9,16 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/MalenkiySolovey/solovey-host/outbounds"
 )
 
 type PresetInput struct {
-	Format     string `json:"format"`
-	Name       string `json:"name,omitempty"`
-	TemplateID string `json:"templateId,omitempty"`
-	Content    []byte `json:"content,omitempty"`
+	Format        string            `json:"format"`
+	Name          string            `json:"name,omitempty"`
+	TemplateID    string            `json:"templateId,omitempty"`
+	Content       []byte            `json:"content,omitempty"`
+	DependencyIDs map[string]string `json:"dependencyIds,omitempty"` // ZIP entry path to explicitly chosen managed ID.
 }
 
 type PresetIssue struct {
@@ -26,10 +29,11 @@ type PresetIssue struct {
 }
 
 type PresetDependency struct {
-	Source string `json:"source"`
-	ID     string `json:"id"`
-	Kind   string `json:"kind"`
-	State  string `json:"state"` // new, reuse, conflict, or missing
+	Source    string `json:"source"`
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	State     string `json:"state"` // new, reuse, conflict, or missing
+	CanRename bool   `json:"canRename,omitempty"`
 }
 
 type PresetProfile struct {
@@ -67,19 +71,29 @@ func (c Catalog) PreparePreset(id string, input PresetInput) (Catalog, PresetPre
 	if len(input.Content) > MaxPresetBytes {
 		return Catalog{}, PresetPreview{}, fmt.Errorf("preset has %d bytes; import limit is %d bytes", len(input.Content), MaxPresetBytes)
 	}
+	if len(input.DependencyIDs) > 0 {
+		if input.Format != "zip" || len(input.DependencyIDs) > maxPresetEntries {
+			return Catalog{}, PresetPreview{}, errors.New("dependency IDs apply only to files in one preset archive")
+		}
+		for source, id := range input.DependencyIDs {
+			if len(source) == 0 || len(source) > len("lists/")+maxGUIFileNameBytes || !outbounds.ValidZapretStrategyRef(id) {
+				return Catalog{}, PresetPreview{}, errors.New("choose a managed dependency ID of 1 to 64 lowercase letters, digits or hyphens")
+			}
+		}
+	}
 	if input.Format == "template" && input.TemplateID != "" && len(input.Content) == 0 {
 		template, ok := findTemplate(input.TemplateID)
 		if !ok {
 			return Catalog{}, PresetPreview{}, errors.New("preset template does not exist")
 		}
-		return c.prepareNativePreset(id, firstName(input.Name, template.Name), template.source, nil)
+		return c.prepareNativeSource(id, firstName(input.Name, template.Name), nativePresetSource{text: template.source, origin: template.savedOrigin()})
 	}
 	if input.TemplateID != "" || len(input.Content) == 0 {
 		return Catalog{}, PresetPreview{}, errors.New("select one preset source")
 	}
 	switch input.Format {
 	case "native":
-		return c.prepareNativePreset(id, input.Name, string(input.Content), nil)
+		return c.prepareNativeSource(id, input.Name, nativePresetSource{text: string(input.Content)})
 	case "json":
 		return c.prepareTransferPreset(id, input.Name, input.Content)
 	case "zip":
@@ -88,14 +102,17 @@ func (c Catalog) PreparePreset(id string, input PresetInput) (Catalog, PresetPre
 			return Catalog{}, PresetPreview{}, err
 		}
 		if _, ok := files["manifest.json"]; ok {
-			return c.prepareGUIPreset(id, input.Name, input.Content, files)
+			return c.prepareGUIPreset(id, input.Name, input.Content, files, input.DependencyIDs)
 		}
 		if encoded, ok := files["strategy.json"]; ok && len(files) == 1 {
+			if len(input.DependencyIDs) != 0 {
+				return Catalog{}, PresetPreview{}, errors.New("dependency IDs cannot rewrite a sealed strategy transfer")
+			}
 			return c.prepareTransferPreset(id, input.Name, encoded)
 		}
 		if source, ok := files["strategy.txt"]; ok && files["strategy.json"] == nil {
 			delete(files, "strategy.txt")
-			return c.prepareNativePreset(id, input.Name, string(source), files)
+			return c.prepareNativeSource(id, input.Name, nativePresetSource{text: string(source), files: files, dependencyIDs: input.DependencyIDs})
 		}
 		return Catalog{}, PresetPreview{}, errors.New("ZIP must contain either strategy.json alone or strategy.txt with its data dependencies")
 	default:
@@ -124,10 +141,10 @@ func (c Catalog) prepareTransferPreset(id, name string, data []byte) (Catalog, P
 				state = "conflict"
 			}
 		}
-		p.Dependencies = append(p.Dependencies, PresetDependency{key, key, string(list.Kind), state})
+		p.Dependencies = append(p.Dependencies, PresetDependency{Source: key, ID: key, Kind: string(list.Kind), State: state})
 	}
 	for key, data := range transfer.BlobAssets {
-		p.Dependencies = append(p.Dependencies, PresetDependency{key, key, "blob", c.blobImportState(key, data)})
+		p.Dependencies = append(p.Dependencies, PresetDependency{Source: key, ID: key, Kind: "blob", State: c.blobImportState(key, data)})
 	}
 	slices.SortFunc(p.Dependencies, func(a, b PresetDependency) int {
 		if result := strings.Compare(a.Kind, b.Kind); result != 0 {

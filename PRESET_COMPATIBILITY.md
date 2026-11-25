@@ -48,11 +48,11 @@ compared in source. No strategy, probe or network setting was activated.
 
 | Frozen feature family | Disposition and owner |
 | --- | --- |
-| Preset catalog, grouping, clone, ordering, raw review | Adopted into the Component's existing Strategy catalog and shared UI. A template has no runtime identity and imports always create a new record. |
-| `--new`, `--name`, positive `--filter-tcp/udp`, single or dual `--filter-l3` | Admitted with stable managed IDs, original profile order and finite, explicit transport scope. A combined TCP/UDP filter in one profile, wildcard, negative, or over-budget port scope is not silently split or widened. |
+| Preset catalog, grouping, clone, ordering, raw review | Adopted into the Component's existing Strategy catalog and shared UI. Importing an adapted template creates a new Strategy with the immutable template ID, reference version/commit and SHA-256 of the template text. Later edits retain that origin independently of the runtime revision. |
+| `--new`, `--name`, positive `--filter-tcp/udp`, single or dual `--filter-l3` | Admitted with stable managed IDs, original profile order and finite, explicit transport scope. Combined TCP/UDP stays in one native profile and exposes separate TCP and UDP port sets in the shared editor. The family and list filters apply to the whole profile. Wildcards, negative port filters and over-budget scope cannot map to the current finite Host admission; Circular retains its qualified TCP-only return path. |
 | `--filter-l7`, `--payload`, `--in-range`, `--out-range` and `--lua-desync` | Admitted only for the typed TLS/HTTP/QUIC payload and action families already checked by the compiler: split, ordered HTTP, bounded QUIC and Circular with its qualified return path. Payload/range state is order-sensitive. Other values, matches, functions, parameter sets, or action chains stay inert with a reason. |
 | `--hostlist-domains`, `--ipset-ip` and corresponding exclusions | Admitted as typed include/exclude filters. File-backed `--hostlist`/`--ipset` and exclusions can map one managed list per slot from `lists/<id>.txt` or existing matching content. No external files, automatic lists or wildcard path resolution. |
-| `--blob`, fake assets, native named data | Inline hex or packaged `blobs/<id>.hex` can map to a managed QUIC asset only when consumed by an admitted action. Matching IDs are reused; different content is a conflict. A custom blob still requires the existing installed Host permission. This is not a Windows fake binary importer. |
+| `--blob`, fake assets, native named data | Inline hex or packaged `blobs/<id>.hex` or `blobs/<id>.bin` can map to a managed QUIC asset only when consumed by an admitted action. Matching IDs are reused; different content is a conflict. A custom blob still requires the existing installed Host permission. This does not import the GUI's packaged fake catalog. |
 | `--skip`, native `--template`/`--import`, unknown profile modifiers | Preview only. The typed runtime does not represent their effects; importing a file does not grant permission to expand or bypass profile scope. |
 | `--wf-*`, `--writable`, platform migration, driver controls | Windows/runtime owner, not a Linux strategy. Keep original source and show the exact flag. No driver, host filesystem or firewall settings are translated. |
 | `--ctrack-*`, `--ipcache-*`, queue, marks, debug | Engine/Planner-owned settings, not Strategy fields. Import cannot override them. |
@@ -66,14 +66,14 @@ compared in source. No strategy, probe or network setting was activated.
 | Resource | Limit and reason |
 | --- | --- |
 | Saved catalog (including unused lists, blobs and Lua drafts) | 256 KiB serialized, shared with Product settings. Removed catalog-wide list/blob counts; inactive entries consume bytes, not runtime slots. |
-| Import transfer | 256 KiB input and 256 KiB total uncompressed ZIP data, at most 128 regular entries with per-entry limits. Only declared text forms; no extraction. Namespace/size checks happen before entries are read. |
+| Import transfer | 256 KiB input and 256 KiB total uncompressed ZIP data, at most 128 regular entries with per-entry limits. Only declared text forms and bounded opaque QUIC data; no extraction. Namespace/size checks happen before entries are read. |
 | Native review and authoring | 64 KiB for inert source (covers the frozen corpus), 8 KiB for admitted editable text. Preview can explain text that cannot be stored as an active definition. |
 | Definition and packet scope | 8 KiB typed definition and up to 64 explicit ports per transport, matching the installed receiver and Host scope. Runtime argv and nft transaction size are separately bounded. |
 | Lists | No fixed entry count; native lists use the existing 2 KiB aggregate filter-byte budget per Strategy. An 80-entry scope fits and is covered by the pinned engine's dry-run test. The shared catalog also has its own serialized size bound. |
 | QUIC assets | Up to eight managed assets and 1,200 custom bytes per Strategy, with the existing Host authorization. Storage outside an active definition uses the catalog byte budget. |
 
 `strategy.txt` packages may also carry `lists/<id>.txt` and
-`blobs/<id>.hex`; `strategy.json` packages contain only that file. Exported
+`blobs/<id>.hex` or `blobs/<id>.bin`; `strategy.json` packages contain only that file. Exported
 ZIP and JSON preserve the sealed record, raw text, and its dependencies.
 Converted native source is shown alongside the original. Conversion only
 replaces accepted file/declaration dependencies with managed references;
@@ -93,6 +93,14 @@ effective list. A package whose native text includes Windows interception or
 unadmitted options remains review-only; the importer does not drop options.
 The saved strategy and Solovey transfer retain the source archive's format,
 version, claimed name and input SHA-256, separate from the runtime revision.
+For complete, referenced data files, the operator can choose a different
+managed ID from import review and preview again. The remap applies only to
+the incoming Strategy and leaves existing assets and their consumers intact.
+It cannot repair an overlay, substitute missing bytes or rewrite a sealed
+Solovey JSON transfer.
+The same managed list selectors are available on native-owned records without
+rewriting their raw source. The existing validation applies to the joint text
+and list selection, including profile IDs and conflicts with inline lists.
 
 ## Lua authoring and runtime
 

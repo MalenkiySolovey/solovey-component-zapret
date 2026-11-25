@@ -81,8 +81,9 @@ func readPresetPackage(data []byte) (map[string][]byte, error) {
 		}
 		content, err := io.ReadAll(io.LimitReader(input, int64(entry.UncompressedSize64)+1))
 		closeErr := input.Close()
-		if err != nil || closeErr != nil || uint64(len(content)) != entry.UncompressedSize64 || !utf8.Valid(content) {
-			return nil, fmt.Errorf("invalid or non-text ZIP entry %q", name)
+		if err != nil || closeErr != nil || uint64(len(content)) != entry.UncompressedSize64 ||
+			(presetAssetID(name, "blobs/", ".bin") == "" && !utf8.Valid(content)) {
+			return nil, fmt.Errorf("invalid ZIP entry %q; text entries must be UTF-8", name)
 		}
 		remaining -= uint64(len(content))
 		files[name] = content
@@ -102,6 +103,9 @@ func presetEntryLimit(name string) (int, bool) {
 	}
 	if presetAssetID(name, "blobs/", ".hex") != "" {
 		return MaxNativeBlobBytes*2 + 2, true // Optional trailing newline.
+	}
+	if presetAssetID(name, "blobs/", ".bin") != "" {
+		return MaxNativeBlobBytes, true
 	}
 	return 0, false
 }

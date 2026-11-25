@@ -76,12 +76,19 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 	t.Run("managed-package", func(t *testing.T) {
 		validatePresetEngine(t, root, PresetInput{Format: "zip", Content: fixturePresetPackage(t, portablePreset)})
 	})
+	t.Run("managed-binary-package", func(t *testing.T) {
+		validatePresetEngine(t, root, PresetInput{Format: "zip", Content: presetBinaryFixture(t, "\xff\x00\x7f"),
+			DependencyIDs: map[string]string{"blobs/fixture.bin": "portable-blob"}})
+	})
 	t.Run("zapretgui-package", func(t *testing.T) {
 		validatePresetEngine(t, root, PresetInput{Format: "zip", Content: guiPackageFixture(t, guiFixturePreset, "standalone", nil)})
 	})
 	t.Run("native-list-byte-budget", func(t *testing.T) {
 		text := "--filter-tcp=443 --hostlist-domains=" + strings.Join(namedListFixture(80), ",")
 		validatePresetEngine(t, root, PresetInput{Format: "native", Content: []byte(text)})
+	})
+	t.Run("native-dual-transport", func(t *testing.T) {
+		validatePresetEngine(t, root, PresetInput{Format: "native", Content: []byte(dualTransportFixture)})
 	})
 }
 

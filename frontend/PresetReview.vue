@@ -15,7 +15,7 @@
           <v-textarea v-if="!file" v-model="native" :label="t('zapretCatalog.raw')" rows="4" spellcheck="false"
             :maxlength="nativeReviewBytes" :disabled="busy" class="native-input" />
         </template>
-        <v-btn variant="tonal" prepend-icon="mdi-check" :loading="busy && !result" :disabled="busy || !canReview" @click="review">
+        <v-btn variant="tonal" prepend-icon="mdi-check" :loading="busy && !reviewed" :disabled="busy || !canReview" @click="review">
           {{ t('zapretCatalog.review') }}
         </v-btn>
         <section v-if="result" class="mt-4" aria-live="polite" aria-labelledby="zapret-review-result">
@@ -41,6 +41,9 @@
                 <code>{{ dep.source }}</code> → <code>{{ dep.id }}</code> · {{ t(`zapretCatalog.dependencyKind.${dep.kind}`, dep.kind) }} · {{ t(`zapretCatalog.dependencyState.${dep.state}`) }}
               </li>
             </ul>
+            <v-text-field v-for="dep in repairable" :key="dep.source" :model-value="dependencyIDs[dep.source] ?? ''"
+              :label="t('zapretCatalog.newDependencyID', { path: dep.source })" maxlength="64" density="compact" clearable :disabled="busy"
+              @update:model-value="setDependencyID(dep.source, $event)" />
           </template>
           <details v-if="result.source" class="mb-2">
             <summary>{{ t('zapretCatalog.originalSource') }}</summary>
@@ -60,7 +63,7 @@
       <v-card-actions class="d-flex flex-wrap">
         <v-spacer />
         <v-btn :disabled="busy" @click="emit('close')">{{ t('zapretCatalog.cancel') }}</v-btn>
-        <v-btn color="primary" variant="tonal" prepend-icon="mdi-content-save-outline" :loading="busy && !!result" :disabled="busy || !result?.record"
+        <v-btn color="primary" variant="tonal" prepend-icon="mdi-content-save-outline" :loading="busy && !!reviewed" :disabled="busy || needsReview || !reviewed || !result?.record"
           @click="save">{{ t('zapretCatalog.savePreset') }}</v-btn>
       </v-card-actions>
     </v-card>
@@ -71,7 +74,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PresetOriginDetails from './PresetOriginDetails.vue'
-import { catalogError, encodePresetBytes, nativeReviewBytes, presetBytes, reviewPreset, savePreset, type CatalogView, type PresetInput, type PresetPreview, type PresetTemplate } from './catalog'
+import { catalogError, encodePresetBytes, nativeReviewBytes, presetBytes, profilePorts, reviewPreset, savePreset, type CatalogView, type PresetInput, type PresetPreview, type PresetTemplate } from './catalog'
 
 const props = defineProps<{ revision: string; template?: PresetTemplate; templateLabel?: string }>()
 const emit = defineEmits<{ close: []; saved: [CatalogView] }>()
@@ -82,11 +85,15 @@ const file = ref<File>()
 const fileField = ref<HTMLInputElement>()
 const result = ref<PresetPreview>()
 const reviewed = ref<PresetInput>()
+const dependencyIDs = ref<Record<string, string>>({})
+const needsReview = ref(false)
 const busy = ref(false)
 const error = ref('')
 const canReview = computed(() => props.template || file.value || native.value.trim())
+const repairable = computed(() => [...new Map(result.value?.dependencies?.filter(dep =>
+  dep.canRename && (dep.state === 'conflict' || Object.hasOwn(dependencyIDs.value, dep.source))).map(dep => [dep.source, dep])).values()])
 const orderedProfiles = computed(() => result.value?.record?.definition.profiles.map(profile =>
-  `${profile.id} · ${profile.protocol.toUpperCase()} · ${profile.ports.join(', ')}${profile.payload ? ` · ${profile.payload}` : ''}`)
+  `${profile.id} · ${profilePorts(profile)}${profile.payload ? ` · ${profile.payload}` : ''}`)
   ?? result.value?.profiles?.map(profile => `${profile.name || t('zapretCatalog.unnamedProfile')} · ${t('zapretCatalog.sourceLine', profile)}`) ?? [])
 
 function chooseFile(event: Event) {
@@ -94,7 +101,22 @@ function chooseFile(event: Event) {
   if (input.files?.[0]) file.value = input.files[0]
   input.value = ''
 }
-watch([name, native, file], () => { result.value = undefined; reviewed.value = undefined; error.value = '' })
+watch([native, file], () => {
+  result.value = undefined
+  reviewed.value = undefined
+  dependencyIDs.value = {}
+  needsReview.value = false
+  error.value = ''
+})
+watch(name, () => {
+  if (result.value) needsReview.value = true
+  error.value = ''
+})
+function setDependencyID(path: string, id: string | null) {
+  if (id?.trim()) dependencyIDs.value[path] = id.trim()
+  else delete dependencyIDs.value[path]
+  needsReview.value = true
+}
 async function run(action: () => Promise<void>) {
   if (busy.value) return
   busy.value = true
@@ -103,6 +125,7 @@ async function run(action: () => Promise<void>) {
   finally { busy.value = false }
 }
 const review = () => run(async () => {
+  reviewed.value = undefined
   const label = name.value.trim()
   let input: PresetInput
   if (props.template) {
@@ -115,15 +138,15 @@ const review = () => run(async () => {
     if (selected && selected.size > max) throw new Error(t('zapretCatalog.importTooLarge', { max: max / 1024 }))
     const content = selected ? new Uint8Array(await selected.arrayBuffer()) : new TextEncoder().encode(native.value)
     if (content.length > max) throw new Error(t('zapretCatalog.importTooLarge', { max: max / 1024 }))
-    input = { format, name: label || (format === 'native' ? selected?.name.replace(/\.[^.]+$/, '') : undefined), content: encodePresetBytes(content) }
+    input = { format, name: label || (format === 'native' ? selected?.name.replace(/\.[^.]+$/, '') : undefined), content: encodePresetBytes(content),
+      ...(format === 'zip' && Object.keys(dependencyIDs.value).length ? { dependencyIds: { ...dependencyIDs.value } } : {}) }
   }
-  result.value = undefined
-  reviewed.value = undefined
   result.value = await reviewPreset(input, props.revision)
   reviewed.value = input
+  needsReview.value = false
 })
 const save = () => run(async () => {
-  if (!result.value?.record || !reviewed.value) return
+  if (!result.value?.record || !reviewed.value || needsReview.value) return
   emit('saved', await savePreset(reviewed.value, props.revision))
 })
 onMounted(() => { if (props.template) void review() })

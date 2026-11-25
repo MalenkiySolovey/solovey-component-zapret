@@ -58,6 +58,7 @@ type Profile struct {
 	ID          string                `json:"id"`
 	Protocol    intent.PacketProtocol `json:"protocol"`
 	Ports       []uint16              `json:"ports"`
+	UDPPorts    []uint16              `json:"udpPorts,omitempty"` // Additional filter in a combined TCP/UDP native profile.
 	Payload     Payload               `json:"payload,omitempty"`
 	SplitAt     uint16                `json:"splitAt,omitempty"`
 	QUICRepeats uint8                 `json:"quicRepeats,omitempty"`
@@ -106,17 +107,20 @@ func Seal(value Strategy) (Strategy, error) {
 	needsReturn := false
 	for i, profile := range value.Profiles {
 		if !outbounds.ValidZapretStrategyRef(profile.ID) || seen[profile.ID] || len(profile.Ports) == 0 ||
-			(profile.Protocol != intent.PacketProtocolTCP && profile.Protocol != intent.PacketProtocolUDP) {
+			(profile.Protocol != intent.PacketProtocolTCP && profile.Protocol != intent.PacketProtocolUDP) ||
+			(len(profile.UDPPorts) != 0 && profile.Protocol != intent.PacketProtocolTCP) {
 			return Strategy{}, ErrInvalidStrategy
-		}
-		if len(profile.Ports) > maxAdmittedPorts {
-			return Strategy{}, portScopeBudgetError(profile.Protocol, len(profile.Ports))
 		}
 		seen[profile.ID] = true
-		profile.Ports = slices.Clone(profile.Ports)
-		slices.Sort(profile.Ports)
-		if profile.Ports[0] == 0 || len(slices.Compact(slices.Clone(profile.Ports))) != len(profile.Ports) {
-			return Strategy{}, ErrInvalidStrategy
+		var err error
+		if profile.Ports, err = sealPorts(profile.Protocol, profile.Ports); err != nil {
+			return Strategy{}, err
+		}
+		if profile.UDPPorts, err = sealPorts(intent.PacketProtocolUDP, profile.UDPPorts); err != nil {
+			return Strategy{}, err
+		}
+		if profile.Circular != nil && len(profile.UDPPorts) != 0 {
+			return Strategy{}, fmt.Errorf("%w: profile %q: Circular is only qualified with a TCP-only filter and its admitted return path", ErrInvalidStrategy, profile.ID)
 		}
 		if profile.Family != "" && profile.Family != IPv4 && profile.Family != IPv6 || !profile.validAction() {
 			return Strategy{}, ErrInvalidStrategy
@@ -171,6 +175,31 @@ func Seal(value Strategy) (Strategy, error) {
 	return value, nil
 }
 
+func sealPorts(protocol intent.PacketProtocol, ports []uint16) ([]uint16, error) {
+	if len(ports) == 0 {
+		return nil, nil
+	}
+	if len(ports) > maxAdmittedPorts {
+		return nil, portScopeBudgetError(protocol, len(ports))
+	}
+	ports = slices.Clone(ports)
+	slices.Sort(ports)
+	if ports[0] == 0 || len(slices.Compact(slices.Clone(ports))) != len(ports) {
+		return nil, ErrInvalidStrategy
+	}
+	return ports, nil
+}
+
+func (p Profile) portsOn(protocol intent.PacketProtocol) []uint16 {
+	if p.Protocol == protocol {
+		return p.Ports
+	}
+	if protocol == intent.PacketProtocolUDP {
+		return p.UDPPorts
+	}
+	return nil
+}
+
 func (p Profile) hasAction() bool {
 	return p.SplitAt != 0 || p.QUICRepeats != 0 || p.Circular != nil || len(p.HTTPActions) != 0
 }
@@ -204,7 +233,7 @@ func (p Profile) validAction() bool {
 		return p.Protocol == intent.PacketProtocolTCP && p.SplitAt <= maxSplitPosition && p.QUICRepeats == 0 &&
 			(p.Payload == TLSClientHello || p.Payload == HTTPRequest)
 	case p.QUICRepeats != 0:
-		return p.Protocol == intent.PacketProtocolUDP && p.QUICRepeats <= 4 && p.Payload == QUICInitial
+		return len(p.portsOn(intent.PacketProtocolUDP)) != 0 && p.QUICRepeats <= 4 && p.Payload == QUICInitial
 	default:
 		return p.Payload == ""
 	}
@@ -251,13 +280,11 @@ func (value Strategy) scope(family AddressFamily) Scope {
 		if family != "" && profile.Family != "" && profile.Family != family {
 			continue
 		}
-		if profile.Protocol == intent.PacketProtocolTCP {
-			result.TCP = append(result.TCP, profile.Ports...)
-			if profile.Circular != nil {
-				result.ReturnTCP = append(result.ReturnTCP, profile.Ports...)
-			}
-		} else {
-			result.UDP = append(result.UDP, profile.Ports...)
+		tcp := profile.portsOn(intent.PacketProtocolTCP)
+		result.TCP = append(result.TCP, tcp...)
+		result.UDP = append(result.UDP, profile.portsOn(intent.PacketProtocolUDP)...)
+		if profile.Circular != nil {
+			result.ReturnTCP = append(result.ReturnTCP, tcp...)
 		}
 	}
 	slices.Sort(result.TCP)
@@ -274,7 +301,12 @@ func (value Strategy) scope(family AddressFamily) Scope {
 // and packet positions. A profile that shadows it may not run that action.
 func (value Strategy) HandlesQUIC(family AddressFamily, port uint16) bool {
 	for _, p := range value.Profiles {
-		if p.Protocol == intent.PacketProtocolUDP && (p.Family == "" || p.Family == family) && slices.Contains(p.Ports, port) {
+		if (p.Family == "" || p.Family == family) && slices.Contains(p.portsOn(intent.PacketProtocolUDP), port) {
+			// Typed actions emit an L7 filter for their payload. A mixed
+			// TCP/TLS or TCP/HTTP action will not match a QUIC packet.
+			if p.hasAction() && p.Payload != QUICInitial {
+				continue
+			}
 			if p.QUICRepeats == 0 || p.QUICBlobRef != "" || p.OutRange != "" {
 				return false
 			}
@@ -406,8 +438,7 @@ func appendProfiles(args []string, value Strategy, mark uint32, binding int, gro
 		} else if groupNames {
 			args = append(args, "--name="+name)
 		}
-		args = append(args, fmt.Sprintf("--filter-mark=0x%x/0xffffffff", mark),
-			"--filter-"+string(profile.Protocol)+"="+nativePortList(profile.Ports))
+		args = profile.appendPortFilters(append(args, fmt.Sprintf("--filter-mark=0x%x/0xffffffff", mark)))
 		if profile.Family != "" {
 			args = append(args, "--filter-l3="+string(profile.Family))
 		}

@@ -54,9 +54,80 @@ func TestNativeRangesRejectUnboundedInvalidAndCombinedOverflow(t *testing.T) {
 	if _, err := ParseNative("fixture", full); err != nil {
 		t.Fatal(err)
 	}
-	for _, input := range []string{"--filter-udp=100-164", full + " --new --filter-udp=164"} {
+	for _, input := range []string{"--filter-udp=100-164", full + " --new --filter-udp=164", "--filter-tcp=443 " + full + " --new --filter-udp=164"} {
 		if _, err := ParseNative("fixture", input); err == nil || !strings.Contains(err.Error(), "Host admits at most 64") {
 			t.Errorf("port budget diagnostic missing for %q: %v", input, err)
+		}
+	}
+}
+
+const dualTransportFixture = "--name=passive\n--filter-tcp=8000-8002\n--filter-udp=443\n--filter-l3=ipv6\n" +
+	"--ipset-exclude-ip=2001:db8::1/128\n--new=quic\n--filter-tcp=8443\n--filter-udp=443,853\n" +
+	"--filter-l7=quic\n--payload=quic_initial\n--lua-desync=fake:blob=fake_default_quic:repeats=1\n"
+
+func TestNativeDualTransportProfiles(t *testing.T) {
+	raw := dualTransportFixture
+	record, err := SealDraft(Draft{ID: "fixture", Name: "Dual transport", Raw: &raw})
+	if err != nil || !record.VisualEditable() {
+		t.Fatalf("canonical dual-transport source must be visually editable: %v", err)
+	}
+	value := record.Definition
+	otherOrder := strings.Replace(raw, "--filter-tcp=8000-8002\n--filter-udp=443", "--filter-udp=443\n--filter-tcp=8000-8002", 1)
+	otherOrder = strings.Replace(otherOrder, "--filter-tcp=8443\n--filter-udp=443,853", "--filter-udp=443,853\n--filter-tcp=8443", 1)
+	other, err := SealDraft(Draft{ID: "fixture", Name: record.Name, Raw: &otherOrder})
+	if err != nil || other.Definition.Revision != value.Revision || other.VisualEditable() || other.Raw != otherOrder {
+		t.Fatalf("flag order changed runtime semantics or original source was lost: %v", err)
+	}
+	visual, err := SealDraft(Draft{ID: "fixture", Name: record.Name, Profiles: value.Profiles})
+	if err != nil || visual.Definition.Revision != value.Revision || visual.Raw != raw {
+		t.Fatalf("visual round trip lost a port filter or changed order: %v", err)
+	}
+	imported, err := other.Export().Import()
+	if err != nil || imported.Raw == nil || *imported.Raw != otherOrder {
+		t.Fatalf("transfer did not preserve the original filter order: %v", err)
+	}
+	for _, tc := range []struct {
+		family AddressFamily
+		tcp    []uint16
+	}{{IPv4, []uint16{8443}}, {IPv6, []uint16{8000, 8001, 8002, 8443}}} {
+		scope, err := value.PacketScopeForFamily(tc.family)
+		if err != nil || !slices.Equal(scope.TCP, tc.tcp) || !slices.Equal(scope.UDP, []uint16{443, 853}) || scope.NeedsReturn {
+			t.Errorf("%s scope mixed transport/family or gained return traffic: %+v, %v", tc.family, scope, err)
+		}
+	}
+	if !value.HandlesQUIC(IPv4, 443) || value.HandlesQUIC(IPv6, 443) || !value.HandlesQUIC(IPv6, 853) {
+		t.Fatal("QUIC coverage ignored the earlier mixed passive profile or matched the wrong family/port")
+	}
+	argv, err := value.Compile("/opt/zapret2", 401, 0x120000, 0x40000000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := slices.Index(argv, "--filter-mark=0x120000/0xffffffff")
+	want := []string{"--filter-mark=0x120000/0xffffffff", "--filter-tcp=8000-8002", "--filter-udp=443", "--filter-l3=ipv6",
+		"--ipset-exclude-ip=2001:db8::1/128", "--new=quic", "--filter-mark=0x120000/0xffffffff",
+		"--filter-tcp=8443", "--filter-udp=443,853", "--filter-l7=quic", "--payload=quic_initial", "--lua-desync=fake:blob=fake_default_quic:repeats=1"}
+	if first < 0 || !slices.Equal(argv[first:], want) {
+		t.Fatalf("combined filters were split or the exclusion or mark was lost: %v", argv)
+	}
+}
+
+func TestNativeDualTransportL7DoesNotShadowQUIC(t *testing.T) {
+	const source = "--filter-tcp=443 --filter-udp=853 --filter-l7=tls --payload=tls_client_hello --lua-desync=multisplit:pos=9 " +
+		"--new=quic --filter-udp=853 --filter-l7=quic --payload=quic_initial --lua-desync=fake:blob=fake_default_quic:repeats=1"
+	value, err := ParseNative("fixture", source)
+	if err != nil || !value.HandlesQUIC(IPv6, 853) {
+		t.Fatalf("TCP/TLS action in a mixed profile cannot shadow QUIC: %v", err)
+	}
+}
+
+func TestNativeSingleTransportRevisionsUnchanged(t *testing.T) {
+	for _, tc := range []struct{ filter, legacy string }{
+		{"--filter-tcp=443", "1cb5e0caa34931049ac5e219168ceb26f342a3663ccd65efa35b4f7710b99656"},
+		{"--filter-udp=443", "c166fd36ef88f95912cee03a752e10e3ffb04c49f6f86e94feec0a13653d709d"},
+	} {
+		value, err := ParseNative("fixture", tc.filter)
+		if err != nil || value.Revision != tc.legacy {
+			t.Errorf("%s changed its sealed v1 revision: %s, %v", tc.filter, value.Revision, err)
 		}
 	}
 }
@@ -231,7 +302,8 @@ func TestNativeProfileRejectsExecutorAndAuthorityOptions(t *testing.T) {
 		"--filter-tcp=443 --ipset-exclude-ip=2001:db8::1/129",
 		"--filter-tcp=443 --hostlist-domains=" + strings.Repeat("a.test,", maxNativeListBytes/len("a.test,")+1) + "b.test",
 		"--filter-tcp=443 --filter-l3=all",
-		"--filter-udp=443 --filter-tcp=443",
+		"--filter-udp=443 --filter-tcp=443 --filter-udp=853",
+		strings.Replace(circularFixture, "--filter-tcp=443", "--filter-tcp=443 --filter-udp=443", 1),
 		"--filter-udp=443 --filter-l7=quic --payload=quic_initial --lua-desync=fake:blob=fake_default_quic:repeats=5",
 		"--filter-udp=443 --filter-l7=quic --payload=quic_initial --lua-desync=fake:blob=other:repeats=1",
 		"--filter-tcp=443 --filter-l7=quic --payload=quic_initial --lua-desync=fake:blob=fake_default_quic:repeats=1",

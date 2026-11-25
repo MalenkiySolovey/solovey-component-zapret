@@ -106,18 +106,22 @@ func parseNative(id, text string) (Strategy, error) {
 				return Strategy{}, bad
 			}
 		case "--filter-tcp", "--filter-udp":
-			if current.Protocol != "" {
-				return Strategy{}, bad
-			}
-			current.Protocol = intent.PacketProtocolTCP
+			protocol := intent.PacketProtocolTCP
 			if key == "--filter-udp" {
-				current.Protocol = intent.PacketProtocolUDP
+				protocol = intent.PacketProtocolUDP
 			}
-			ports, err := parseNativePorts(input, current.Protocol)
+			ports, err := parseNativePorts(input, protocol)
 			if err != nil {
 				return Strategy{}, token.invalid(err)
 			}
-			current.Ports = ports
+			switch {
+			case current.Protocol == "":
+				current.Protocol, current.Ports = protocol, ports
+			case protocol == intent.PacketProtocolTCP:
+				current.Protocol, current.Ports, current.UDPPorts = protocol, ports, current.Ports
+			default:
+				current.UDPPorts = ports
+			}
 		case "--filter-l7":
 			if input != "tls" && input != "http" && input != "quic" {
 				return Strategy{}, bad
@@ -263,6 +267,14 @@ func nativePortList(ports []uint16) string {
 	return text.String()
 }
 
+func (p Profile) appendPortFilters(args []string) []string {
+	args = append(args, "--filter-"+string(p.Protocol)+"="+nativePortList(p.Ports))
+	if len(p.UDPPorts) != 0 {
+		args = append(args, "--filter-udp="+nativePortList(p.UDPPorts))
+	}
+	return args
+}
+
 // FormatNative is used only when a visual edit changes the parsed profiles.
 // It omits all runtime-owned flags and asset paths.
 func FormatNative(value Strategy) (string, error) {
@@ -276,7 +288,10 @@ func FormatNative(value Strategy) (string, error) {
 		if i > 0 {
 			nameFlag = "--new"
 		}
-		fmt.Fprintf(&text, "%s=%s\n--filter-%s=%s\n", nameFlag, profile.ID, profile.Protocol, nativePortList(profile.Ports))
+		fmt.Fprintf(&text, "%s=%s\n", nameFlag, profile.ID)
+		for _, filter := range profile.appendPortFilters(nil) {
+			fmt.Fprintln(&text, filter)
+		}
 		if profile.Family != "" {
 			fmt.Fprintf(&text, "--filter-l3=%s\n", profile.Family)
 		}
