@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -71,12 +72,40 @@ func TestNamedListsRejectUnresolvedShadowedAndUnboundedData(t *testing.T) {
 	for _, value := range []NamedList{
 		{Kind: HostListKind, Entries: []string{"/etc/passwd"}},
 		{Kind: IPSetKind, Entries: []string{"192.0.2.1,--queue-bypass"}},
-		{Kind: HostListKind, Entries: slices.Repeat([]string{"example.test"}, maxNativeListEntries+1)},
+		{Kind: HostListKind, Entries: slices.Repeat([]string{"example.test"}, maxNativeListBytes/len("example.test")+1)},
 	} {
 		if _, err := c.WithNamedList("unsafe", &value); err == nil {
 			t.Fatalf("unsafe list data accepted: %v", value)
 		}
 	}
+}
+
+func TestNamedListsUseByteBudgetInsteadOfEntryCount(t *testing.T) {
+	c := namedCatalog(t)
+	names := namedListFixture(80)
+	c, err := c.WithNamedList("names", &NamedList{Kind: HostListKind, Entries: names})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := namedDraft("larger-list")
+	r, err := c.SealDraft(d)
+	if err != nil || !slices.Equal(r.Definition.Profiles[0].Lists.HostList, names) {
+		t.Fatalf("list within active budgets did not retain all entries: %v", err)
+	}
+	c.Records[d.ID] = r
+	before := c.Revision()
+	if _, err := c.WithNamedList("names", &NamedList{Kind: HostListKind, Entries: namedListFixture(220)}); err == nil ||
+		!strings.Contains(err.Error(), "bytes per Strategy") || c.Revision() != before {
+		t.Fatalf("oversized edit changed the current strategy or lost the byte-limit reason: %v", err)
+	}
+}
+
+func namedListFixture(count int) []string {
+	hosts := make([]string, count)
+	for i := range hosts {
+		hosts[i] = fmt.Sprintf("h%03d.test", i)
+	}
+	return hosts
 }
 
 func TestNamedListsPortableTransferRejectsConflictAndStaleRevision(t *testing.T) {

@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"strings"
@@ -10,32 +11,47 @@ import (
 	"github.com/MalenkiySolovey/solovey-host/outbounds"
 )
 
+type nativePresetSource struct {
+	text          string
+	files         map[string][]byte
+	origin        *PresetOrigin
+	guiLists      map[string]guiPresetList
+	dependencyIDs map[string]string
+}
+
 type nativePresetPlan struct {
-	catalog Catalog
-	preview PresetPreview
-	files   map[string][]byte
-	used    map[string]bool
-	edits   map[int]string
-	lists   map[string]NamedList
-	blobs   map[string]string
-	decl    map[string]presetBlob
-	refs    ListRefs
+	catalog  Catalog
+	preview  PresetPreview
+	files    map[string][]byte
+	guiLists map[string]guiPresetList
+	used     map[string]bool
+	edits    map[int]string
+	lists    map[string]NamedList
+	blobs    map[string]string
+	decl     map[string]presetBlob
+	refs     ListRefs
+	ids      map[string]string
+	bound    map[string]bool
 }
 
 type presetBlob struct {
 	source, data string
 	token        sourceToken
+	packaged     bool
+	used         bool
 }
 
-func (c Catalog) prepareNativePreset(id, name, raw string, files map[string][]byte) (Catalog, PresetPreview, error) {
+func (c Catalog) prepareNativeSource(id, name string, source nativePresetSource) (Catalog, PresetPreview, error) {
+	raw, files := source.text, source.files
 	if len(raw) > MaxNativeReviewBytes {
 		return Catalog{}, PresetPreview{}, fmt.Errorf("native source has %d bytes; preview limit is %d bytes", len(raw), MaxNativeReviewBytes)
 	}
 	if !utf8.ValidString(raw) {
 		return Catalog{}, PresetPreview{}, fmt.Errorf("native preset must be UTF-8 text")
 	}
-	p := nativePresetPlan{catalog: c, preview: PresetPreview{Source: raw}, files: files, used: map[string]bool{},
-		edits: map[int]string{}, lists: map[string]NamedList{}, blobs: map[string]string{}, decl: map[string]presetBlob{}, refs: ListRefs{}}
+	p := nativePresetPlan{catalog: c, preview: PresetPreview{Source: raw, Origin: source.origin}, files: files, guiLists: source.guiLists, used: map[string]bool{},
+		edits: map[int]string{}, lists: map[string]NamedList{}, blobs: map[string]string{}, decl: map[string]presetBlob{}, refs: ListRefs{},
+		ids: source.dependencyIDs, bound: make(map[string]bool, len(source.dependencyIDs))}
 	tokens, err := nativeSource(raw)
 	if err != nil {
 		p.preview.issue(nil, "invalid-source", err.Error())
@@ -55,13 +71,18 @@ func (c Catalog) prepareNativePreset(id, name, raw string, files map[string][]by
 	}
 	for _, key := range sortedImportKeys(p.decl) {
 		blob := p.decl[key]
-		if _, used := p.blobs[key]; !used {
+		if !blob.used {
 			p.preview.issue(&blob.token, "unused-asset", "this declaration is not used by an admitted QUIC action")
 		}
 	}
 	for _, key := range sortedImportKeys(files) {
 		if !p.used[key] {
 			p.preview.issue(nil, "unused-entry", fmt.Sprintf("package entry %q is not referenced; nothing will be imported", key))
+		}
+	}
+	for _, key := range sortedImportKeys(p.ids) {
+		if !p.bound[key] {
+			p.preview.issue(nil, "unbound-dependency-id", fmt.Sprintf("dependency ID for %q needs a complete, referenced file in the archive", key))
 		}
 	}
 	if len(p.preview.Issues) != 0 {
@@ -142,7 +163,7 @@ func (p *nativePresetPlan) profile(tokens []sourceToken) {
 		if key == "--payload" {
 			payloadSeen = true
 		}
-		if key == "--lua-desync" && !payloadSeen && value != "circular" && !strings.HasPrefix(value, "circular:fails=") {
+		if key == "--lua-desync" && !payloadSeen && value != "pass" && value != "circular" && !strings.HasPrefix(value, "circular:fails=") {
 			p.preview.issue(&token, "payload-order", "the engine snapshots payload at each action; put the intended payload before the action")
 		}
 		switch {
@@ -184,17 +205,17 @@ func (p *nativePresetPlan) checkProfileOption(token sourceToken, key, value stri
 			reason = err.Error()
 		}
 	case "--filter-l7":
-		if value != "tls" && value != "http" && value != "quic" {
-			reason = "only a single TLS, HTTP or QUIC protocol filter is admitted"
+		if !validNativeSelector(value, nativeL7Names) {
+			reason = "use comma-separated L7 protocol names from the pinned engine"
 		}
 	case "--payload":
-		if payloadProtocol(Payload(value)) == "" {
-			reason = "only a single TLS ClientHello, HTTP request or QUIC Initial payload is admitted"
+		if !validNativeSelector(value, nativePayloadNames) {
+			reason = "use comma-separated native payload names from the pinned engine"
 		}
 	case "--lua-desync":
 		action, _, _ := strings.Cut(value, ":")
 		switch action {
-		case "multisplit", "circular", "http_domcase", "http_hostcase", "fake":
+		case "multisplit", "circular", "http_domcase", "http_hostcase", "fake", "pass":
 			// The owner parser checks action parameters and prior filters.
 		default:
 			reason = "this action is outside the admitted typed subset; engine or Windows preset availability is not Solovey support"
@@ -249,27 +270,36 @@ func (p *nativePresetPlan) mapList(token sourceToken, key, value string, refs *N
 		return
 	}
 	value = unquotePresetPath(value)
+	kind := fileListKind(key)
+	if p.guiLists != nil {
+		p.mapGUIList(token, value, kind, slot)
+		return
+	}
 	id := presetAssetID(value, "lists/", ".txt")
 	if id == "" {
 		p.preview.issue(&token, "unsafe-list-path", "only lists/<managed-id>.txt can map to a managed list; no host filesystem paths or URLs are read")
 		return
 	}
-	kind := fileListKind(key)
-	state, err := p.prepareList(value, id, kind)
-	p.preview.Dependencies = append(p.preview.Dependencies, PresetDependency{value, id, string(kind), state})
+	dep, err := p.prepareList(value, id, kind)
+	p.preview.Dependencies = append(p.preview.Dependencies, dep)
 	if err != nil {
 		p.preview.issue(&token, "list-dependency", err.Error())
 		return
 	}
-	*slot = id
+	*slot = dep.ID
 	p.edits[token.start] = ""
 }
 
-func (p *nativePresetPlan) prepareList(path, id string, kind ListKind) (string, error) {
-	current, exists := p.catalog.Lists[id]
-	if exists && current.Kind != kind {
-		return "conflict", fmt.Errorf("managed list %q has a different kind", id)
+func (p *nativePresetPlan) dependencyID(path, fallback string) string {
+	if id, ok := p.ids[path]; ok {
+		p.bound[path] = true
+		return id
 	}
+	return fallback
+}
+
+func (p *nativePresetPlan) prepareList(path, id string, kind ListKind) (PresetDependency, error) {
+	dep := PresetDependency{Source: path, ID: id, Kind: string(kind), State: "missing"}
 	data, present := p.files[path]
 	if present {
 		p.used[path] = true
@@ -281,21 +311,33 @@ func (p *nativePresetPlan) prepareList(path, id string, kind ListKind) (string, 
 		}
 		normal, err := list.normalize()
 		if err != nil {
-			return "conflict", fmt.Errorf("list %q: %w", id, err)
+			dep.State = "conflict"
+			return dep, fmt.Errorf("list %q: %w", dep.Source, err)
 		}
-		previous, staged := p.lists[id]
-		if (staged && normal.Kind != previous.Kind) || (exists && !slices.Equal(normal.Entries, current.Entries)) {
-			return "conflict", fmt.Errorf("managed list %q already has different content or a different kind", id)
+		dep.ID, dep.CanRename = p.dependencyID(path, id), true
+		current, exists := p.catalog.Lists[dep.ID]
+		previous, staged := p.lists[dep.ID]
+		if (staged && (normal.Kind != previous.Kind || !slices.Equal(normal.Entries, previous.Entries))) ||
+			(exists && (normal.Kind != current.Kind || !slices.Equal(normal.Entries, current.Entries))) {
+			dep.State = "conflict"
+			return dep, fmt.Errorf("managed list %q already has different content or a different kind", dep.ID)
 		}
-		p.lists[id] = normal
+		p.lists[dep.ID] = normal
+		dep.State = "new"
+		if exists {
+			dep.State = "reuse"
+		}
+		return dep, nil
 	}
-	if exists {
-		return "reuse", nil
+	if current, exists := p.catalog.Lists[id]; exists {
+		if current.Kind != kind {
+			dep.State = "conflict"
+			return dep, fmt.Errorf("managed list %q has a different kind", id)
+		}
+		dep.State = "reuse"
+		return dep, nil
 	}
-	if present {
-		return "new", nil
-	}
-	return "missing", fmt.Errorf("create a matching managed list %q or include %q in a data-only package", id, path)
+	return dep, fmt.Errorf("create a matching managed list %q or include %q in a data-only package", id, path)
 }
 
 func unquotePresetPath(input string) string {
@@ -316,18 +358,29 @@ func (p *nativePresetPlan) declareBlob(token sourceToken, value string) {
 		return
 	}
 	var data string
-	if hex, ok := strings.CutPrefix(source, "0x"); ok {
-		data, source = hex, id
-	} else if path, ok := strings.CutPrefix(source, "@"); ok && presetAssetID(unquotePresetPath(path), "blobs/", ".hex") == id {
-		source = unquotePresetPath(path)
+	var packaged bool
+	if inline, ok := strings.CutPrefix(source, "0x"); ok {
+		data, source = inline, id
+	} else if strings.HasPrefix(source, "@") {
+		source = unquotePresetPath(source[1:])
+		binary := presetAssetID(source, "blobs/", ".bin") == id
+		if !binary && presetAssetID(source, "blobs/", ".hex") != id {
+			p.preview.issue(&token, "blob-declaration", "use inline hexadecimal data or a matching blobs/<id>.hex or blobs/<id>.bin package entry")
+			return
+		}
 		file, found := p.files[source]
 		if !found {
-			p.preview.Dependencies = append(p.preview.Dependencies, PresetDependency{source, id, "blob", "missing"})
-			p.preview.issue(&token, "blob-dependency", "include the hexadecimal blob file in the data-only package, or explicitly select a managed blob")
+			p.preview.Dependencies = append(p.preview.Dependencies, PresetDependency{Source: source, ID: id, Kind: "blob", State: "missing"})
+			p.preview.issue(&token, "blob-dependency", "include the blob file in the data-only package, or explicitly select a managed blob")
 			return
 		}
 		p.used[source] = true
-		data = strings.TrimSpace(string(file))
+		packaged = true
+		if binary {
+			data = hex.EncodeToString(file)
+		} else {
+			data = strings.TrimSpace(string(file))
+		}
 	} else {
 		p.preview.issue(&token, "blob-declaration", "external blob files and URLs are not read")
 		return
@@ -337,7 +390,7 @@ func (p *nativePresetPlan) declareBlob(token sourceToken, value string) {
 		p.preview.issue(&token, "blob-declaration", err.Error())
 		return
 	}
-	p.decl[id] = presetBlob{source, data, token}
+	p.decl[id] = presetBlob{source: source, data: data, token: token, packaged: packaged}
 	p.edits[token.start] = ""
 }
 
@@ -356,7 +409,7 @@ func (p *nativePresetPlan) mapBlobAction(token sourceToken, value string) bool {
 			state = "missing"
 			p.preview.issue(&token, "blob-dependency", fmt.Sprintf("managed blob %q does not exist", managed))
 		}
-		p.preview.Dependencies = append(p.preview.Dependencies, PresetDependency{managed, managed, "blob", state})
+		p.preview.Dependencies = append(p.preview.Dependencies, PresetDependency{Source: managed, ID: managed, Kind: "blob", State: state})
 		return true
 	}
 	blob, exists := p.decl[id]
@@ -364,10 +417,19 @@ func (p *nativePresetPlan) mapBlobAction(token sourceToken, value string) bool {
 		p.preview.issue(&token, "blob-dependency", "choose a built-in or managed QUIC asset or provide a qualified blob declaration")
 		return true
 	}
+	blob.used = true
+	p.decl[id] = blob
+	if blob.packaged {
+		id = p.dependencyID(blob.source, id)
+	}
 	state := p.catalog.blobImportState(id, blob.data)
-	p.preview.Dependencies = append(p.preview.Dependencies, PresetDependency{blob.source, id, "blob", state})
+	if previous, staged := p.blobs[id]; staged && previous != blob.data {
+		state = "conflict"
+	}
+	p.preview.Dependencies = append(p.preview.Dependencies, PresetDependency{Source: blob.source, ID: id, Kind: "blob", State: state, CanRename: blob.packaged})
 	if state == "conflict" {
 		p.preview.issue(&token, "blob-dependency", fmt.Sprintf("managed blob %q already has different content", id))
+		return true
 	}
 	p.blobs[id] = blob.data
 	p.edits[token.start] = "--lua-desync=fake:blob=" + nativeBlobRefPrefix + id + ":repeats=" + repeats

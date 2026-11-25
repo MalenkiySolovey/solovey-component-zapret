@@ -58,11 +58,13 @@ func parseNative(id, text string) (Strategy, error) {
 		if current.outRangePending {
 			return fmt.Errorf("%w: --out-range needs a following action in native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
 		}
-		if current.Protocol == "" || current.seen["--payload"] != current.seen["--lua-desync"] ||
-			current.seen["--filter-l7"] != current.hasAction() ||
-			current.hasAction() && payloadProtocol(current.Payload) != current.l7 ||
+		if current.Protocol == "" || !current.Pass && current.seen["--payload"] != current.seen["--lua-desync"] ||
+			!current.Pass && current.hasAction() && (current.l7 == "" || payloadProtocol(current.Payload) != current.l7) ||
 			current.inRange != "" && current.Circular == nil {
 			return fmt.Errorf("%w: incomplete or inconsistent native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
+		}
+		if current.Pass || !current.hasAction() {
+			current.L7Filter = current.l7
 		}
 		value.Profiles = append(value.Profiles, current.Profile)
 		return nil
@@ -106,20 +108,24 @@ func parseNative(id, text string) (Strategy, error) {
 				return Strategy{}, bad
 			}
 		case "--filter-tcp", "--filter-udp":
-			if current.Protocol != "" {
-				return Strategy{}, bad
-			}
-			current.Protocol = intent.PacketProtocolTCP
+			protocol := intent.PacketProtocolTCP
 			if key == "--filter-udp" {
-				current.Protocol = intent.PacketProtocolUDP
+				protocol = intent.PacketProtocolUDP
 			}
-			ports, err := parseNativePorts(input, current.Protocol)
+			ports, err := parseNativePorts(input, protocol)
 			if err != nil {
 				return Strategy{}, token.invalid(err)
 			}
-			current.Ports = ports
+			switch {
+			case current.Protocol == "":
+				current.Protocol, current.Ports = protocol, ports
+			case protocol == intent.PacketProtocolTCP:
+				current.Protocol, current.Ports, current.UDPPorts = protocol, ports, current.Ports
+			default:
+				current.UDPPorts = ports
+			}
 		case "--filter-l7":
-			if input != "tls" && input != "http" && input != "quic" {
+			if !validNativeSelector(input, nativeL7Names) {
 				return Strategy{}, bad
 			}
 			current.l7 = input
@@ -140,6 +146,9 @@ func parseNative(id, text string) (Strategy, error) {
 			}
 			current.outRange, current.outRangePending = input, true
 		case "--payload":
+			if current.Pass {
+				return Strategy{}, token.invalid(fmt.Errorf("%w: put --payload before pass; its filter is captured when the action is added", ErrInvalidStrategy))
+			}
 			if current.Circular != nil && current.inRange != circularVariantRange {
 				return Strategy{}, bad
 			}
@@ -161,6 +170,11 @@ func parseNative(id, text string) (Strategy, error) {
 			}
 			if len(current.HTTPActions) != 0 {
 				return Strategy{}, bad
+			}
+			if input == "pass" {
+				current.Pass = true
+				current.OutRange, current.outRangePending = current.outRange, false
+				continue
 			}
 			if fails, ok := strings.CutPrefix(input, "circular:fails="); input == "circular" || ok {
 				if current.seen["--out-range"] {
@@ -263,6 +277,14 @@ func nativePortList(ports []uint16) string {
 	return text.String()
 }
 
+func (p Profile) appendPortFilters(args []string) []string {
+	args = append(args, "--filter-"+string(p.Protocol)+"="+nativePortList(p.Ports))
+	if len(p.UDPPorts) != 0 {
+		args = append(args, "--filter-udp="+nativePortList(p.UDPPorts))
+	}
+	return args
+}
+
 // FormatNative is used only when a visual edit changes the parsed profiles.
 // It omits all runtime-owned flags and asset paths.
 func FormatNative(value Strategy) (string, error) {
@@ -276,7 +298,10 @@ func FormatNative(value Strategy) (string, error) {
 		if i > 0 {
 			nameFlag = "--new"
 		}
-		fmt.Fprintf(&text, "%s=%s\n--filter-%s=%s\n", nameFlag, profile.ID, profile.Protocol, nativePortList(profile.Ports))
+		fmt.Fprintf(&text, "%s=%s\n", nameFlag, profile.ID)
+		for _, filter := range profile.appendPortFilters(nil) {
+			fmt.Fprintln(&text, filter)
+		}
 		if profile.Family != "" {
 			fmt.Fprintf(&text, "--filter-l3=%s\n", profile.Family)
 		}

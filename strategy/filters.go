@@ -7,10 +7,7 @@ import (
 	"strings"
 )
 
-const (
-	maxNativeListEntries = 32
-	maxNativeListBytes   = 2048 // Across all profiles and lists in one Strategy.
-)
+const maxNativeListBytes = 2048 // Across all profiles and lists in one Strategy.
 
 // NativeLists are owned by the Strategy revision. They contain data, not
 // paths; the compiler only emits the engine's inline list options.
@@ -49,10 +46,7 @@ func (l *NativeLists) set(flag, input string) bool {
 func (l NativeLists) seal(remaining *int) (*NativeLists, error) {
 	hasEntries := false
 	for _, list := range l.fields() {
-		if len(*list.entries) > maxNativeListEntries {
-			return nil, fmt.Errorf("%w: %s has %d entries; limit is %d per filter", ErrInvalidStrategy, list.flag, len(*list.entries), maxNativeListEntries)
-		}
-		canonical := make([]string, 0, len(*list.entries))
+		canonical := make([]string, 0, min(len(*list.entries), *remaining))
 		for _, raw := range *list.entries {
 			value, ok := list.parse(raw)
 			*remaining -= max(len(raw), len(value)) + 1

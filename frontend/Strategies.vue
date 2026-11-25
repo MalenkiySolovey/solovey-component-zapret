@@ -197,6 +197,7 @@
           <v-alert v-if="dialogError" type="error" variant="tonal" class="mb-3">{{ dialogError }}</v-alert>
           <v-alert v-if="affected.length" type="warning" variant="tonal" class="mb-3">{{ t('zapretCatalog.editAffects', { refs: affected.map(ref => ref.outboundRef).join(', ') }) }}</v-alert>
           <v-text-field v-model="name" :label="t('zapretCatalog.name')" maxlength="120" :disabled="busy" />
+          <PresetOriginDetails v-if="activeOrigin" :origin="activeOrigin" />
           <div v-if="!originalRaw && !activeID && mode === 'visual' && rows.length === 1 && !rows[0]?.payload" class="d-flex flex-wrap ga-2 mb-3">
             <v-btn size="small" variant="tonal" @click="preset('tls_client_hello', '443,853')">{{ t('zapretCatalog.tlsPreset') }}</v-btn>
             <v-btn size="small" variant="tonal" @click="preset('http_req', '80')">{{ t('zapretCatalog.httpPreset') }}</v-btn>
@@ -209,19 +210,24 @@
           <template v-if="mode === 'raw'">
             <v-alert v-if="rawLocked" type="info" variant="tonal" density="compact" class="mb-3">{{ t('zapretCatalog.nativeOnlyHelp') }}</v-alert>
             <v-textarea v-model="raw" class="native-source" :label="t('zapretCatalog.raw')" spellcheck="false" maxlength="8192" rows="9" :disabled="busy" />
-            <dl v-if="Object.keys(rawRefs).length" class="text-caption">
-              <template v-for="(refs, id) in rawRefs" :key="id">
-                <dt class="font-weight-medium">{{ id }}</dt>
-                <dd v-for="(list, field) in refs" :key="field">{{ t(`zapretCatalog.${field}`) }}: {{ list }}</dd>
-              </template>
-            </dl>
+            <details v-if="rawListProfiles.length && (namedLists.length || Object.keys(rawRefs).length)" class="mb-3" :open="!!Object.keys(rawRefs).length">
+              <summary>{{ t('zapretCatalog.sharedLists') }}</summary>
+              <div v-for="id in rawListProfiles" :key="id" class="mt-2">
+                <div class="text-caption font-weight-medium"><code>{{ id }}</code></div>
+                <div class="list-fields mt-1">
+                  <v-select v-for="field in listFields" :key="field" :model-value="rawRefs[id]?.[field] ?? null" :items="listChoices(field)"
+                    :label="t('zapretCatalog.useList', { field: t(`zapretCatalog.${field}`) })" clearable hide-details density="compact"
+                    @update:model-value="setRawListRef(id, field, $event)" />
+                </div>
+              </div>
+            </details>
           </template>
           <template v-else>
             <div v-for="(row, index) in rows" :key="row.key" class="profile-row border rounded-lg pa-3 mb-2">
               <div class="d-flex justify-space-between align-center flex-wrap ga-2">
                 <div class="text-break">
                   <strong>{{ t('zapretCatalog.profile', { index: index + 1 }) }}</strong>
-                  <div class="text-caption text-medium-emphasis">{{ row.protocol.toUpperCase() }} · {{ row.family || t('zapretCatalog.availableFamilies') }} · {{ row.ports }}</div>
+                  <div class="text-caption text-medium-emphasis">{{ row.protocol === 'udp' ? 'UDP' : 'TCP' }} {{ row.ports }}<template v-if="row.protocol === 'tcp+udp'"> / UDP {{ row.udpPorts }}</template> · {{ row.family || t('zapretCatalog.availableFamilies') }}</div>
                 </div>
                 <div>
                   <v-btn icon="mdi-chevron-up" size="small" variant="text" :disabled="index === 0" :title="t('zapretCatalog.moveUp')" :aria-label="t('zapretCatalog.moveUp')" @click="move(index, -1)" />
@@ -231,9 +237,10 @@
               </div>
               <div class="profile-fields mt-2">
                 <v-text-field v-model="row.id" :label="t('zapretCatalog.profileID')" hide-details density="compact" @update:model-value="visualChanged = true" />
-                <v-select :model-value="row.protocol" :items="['tcp', 'udp']" :label="t('zapretCatalog.protocol')" hide-details density="compact" @update:model-value="changeProtocol(row, $event)" />
+                <v-select :model-value="row.protocol" :items="protocols" :label="t('zapretCatalog.protocol')" hide-details density="compact" @update:model-value="changeProtocol(row, $event)" />
                 <v-select v-model="row.family" :items="families" :label="t('zapretCatalog.family')" hide-details density="compact" @update:model-value="visualChanged = true" />
-                <v-text-field v-model="row.ports" :label="t('zapretCatalog.ports')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                <v-text-field v-model="row.ports" :label="t(row.protocol === 'tcp+udp' ? 'zapretCatalog.tcpPorts' : 'zapretCatalog.ports')" hide-details density="compact" @update:model-value="visualChanged = true" />
+                <v-text-field v-if="row.protocol === 'tcp+udp'" v-model="row.udpPorts" :label="t('zapretCatalog.udpPorts')" hide-details density="compact" @update:model-value="visualChanged = true" />
                 <v-select :model-value="row.payload" :items="payloads(row.protocol)" :label="t('zapretCatalog.payload')" hide-details density="compact" @update:model-value="changePayload(row, $event)" />
                 <v-text-field v-if="row.payload === 'quic_initial'" v-model="row.quicRepeats" type="number" min="1" max="4" :label="t('zapretCatalog.quicRepeats')" hide-details density="compact" @update:model-value="visualChanged = true" />
                 <template v-else-if="row.payload">
@@ -335,6 +342,7 @@ import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import LuaDrafts from './LuaDrafts.vue'
 import PresetReview from './PresetReview.vue'
+import PresetOriginDetails from './PresetOriginDetails.vue'
 import { catalogError, diagnose, draftToSave, exportRecord, loadCatalog, presetBytes, preview, saveCatalog, type CatalogView, type ExportFormat, type HTTPAction, type ListKind, type ListRefs, type NamedList, type NativeListField, type PresetTemplate, type Profile, type ProfileListRefs, type StrategyRecord, type StrategyReference } from './catalog'
 
 const { t, te } = useI18n()
@@ -342,7 +350,8 @@ const route = useRoute()
 const hostID = computed(() => typeof route.params.hostId === 'string' ? route.params.hostId : 'local')
 const hostLabel = computed(() => hostID.value === 'local' ? t('zapretCatalog.localHost') : hostID.value)
 const hostRoute = (name: string) => ({ name, params: { hostId: hostID.value } })
-type Row = { key: number; id: string; protocol: Profile['protocol']; family: NonNullable<Profile['family']> | ''; ports: string;
+type RowProtocol = Profile['protocol'] | 'tcp+udp'
+type Row = { key: number; id: string; protocol: RowProtocol; family: NonNullable<Profile['family']> | ''; ports: string; udpPorts: string;
   payload: NonNullable<Profile['payload']> | ''; splitAt: string; circular?: { failures: string; splits: string }; httpActions?: HTTPAction[];
   quicRepeats: string; quicBlobRef: string; outRange: string; rangeInitiallyOpen?: boolean; lists: Record<NativeListField, string>; refs: ProfileListRefs }
 const listFields = ['hostList', 'hostListExclude', 'ipSet', 'ipSetExclude'] as const
@@ -363,6 +372,7 @@ const favorites = ref<string[]>([])
 const deleteRecord = ref<StrategyRecord>()
 const editing = ref(false)
 const activeID = ref('')
+const activeOrigin = computed(() => view.value?.catalog.records[activeID.value]?.origin)
 const editorRevision = ref('')
 const editorHeading = ref<HTMLElement>()
 const editorPage = ref<HTMLElement>()
@@ -382,6 +392,9 @@ const deleteAssetLabel = computed(() => t(deletingAsset.value?.blob ? 'zapretCat
 const name = ref('')
 const raw = ref('')
 const rawRefs = ref<ListRefs>({})
+const rawProfileIDs = ref<string[]>([])
+const rawRefsChanged = ref(false)
+const rawListProfiles = computed(() => [...new Set([...rawProfileIDs.value, ...Object.keys(rawRefs.value)])])
 const mode = ref<'visual' | 'raw'>('visual')
 const rows = ref<Row[]>([])
 const visualChanged = ref(false)
@@ -394,8 +407,9 @@ const appliedCount = computed(() => view.value?.references.filter(ref => ref.sta
 const unverifiedCount = computed(() => view.value?.references.filter(ref => ref.state === 'blocked').length ?? 0)
 const stateColors: Record<StrategyReference['state'], string | undefined> = { applied: 'success', pending: 'warning', blocked: 'warning', off: undefined }
 const matches = (term: string | null, ...values: string[]) => values.some(value => value.toLocaleLowerCase().includes(term?.trim().toLocaleLowerCase() ?? ''))
+const profileTransports = (profile: Profile) => profile.udpPorts?.length ? ['tcp', 'udp'] : [profile.protocol]
 const filteredRecords = computed(() => records.value.filter(record => matches(search.value, record.name, record.definition.id,
-  ...record.definition.profiles.flatMap(profile => [profile.id, profile.protocol, profile.payload ?? '']))))
+  ...record.definition.profiles.flatMap(profile => [profile.id, ...profileTransports(profile), profile.payload ?? '']))))
 const filteredLists = computed(() => namedLists.value.filter(([id, list]) => matches(assetSearch.value, id, t(`zapretCatalog.${list.kind}Kind`), ...list.entries)))
 const filteredBlobs = computed(() => namedBlobs.value.filter(([id]) => matches(assetSearch.value, id)))
 const templates = computed(() => view.value?.templates ?? [])
@@ -430,9 +444,12 @@ const listChoices = (field: NativeListField) => namedLists.value.filter(([, list
 const listConsumers = (id: string) => records.value.filter(record => Object.values(record.listRefs ?? {}).some(refs => Object.values(refs).includes(id)))
 const blobConsumers = (id: string) => records.value.filter(record => record.definition.profiles.some(p => p.quicBlobRef === id))
 const families = computed(() => [{ title: t('zapretCatalog.availableFamilies'), value: '' }, { title: 'IPv4', value: 'ipv4' }, { title: 'IPv6', value: 'ipv6' }])
-const payloads = (protocol: Profile['protocol']) => [{ title: t('zapretCatalog.passive'), value: '' }, ...(protocol === 'udp'
-  ? [{ title: 'QUIC Initial', value: 'quic_initial' }]
-  : [{ title: 'TLS ClientHello', value: 'tls_client_hello' }, { title: 'HTTP request', value: 'http_req' }])]
+const protocols: { title: string; value: RowProtocol }[] = [
+  { title: 'TCP', value: 'tcp' }, { title: 'UDP', value: 'udp' }, { title: 'TCP + UDP', value: 'tcp+udp' },
+]
+const payloads = (protocol: RowProtocol) => [{ title: t('zapretCatalog.passive'), value: '' },
+  ...(protocol !== 'udp' ? [{ title: 'TLS ClientHello', value: 'tls_client_hello' }, { title: 'HTTP request', value: 'http_req' }] : []),
+  ...(protocol !== 'tcp' ? [{ title: 'QUIC Initial', value: 'quic_initial' }] : [])]
 const tcpActions = (payload: Row['payload']) => [
   { title: t('zapretCatalog.split'), value: 'split' }, { title: 'Circular', value: 'circular' },
   ...(payload === 'http_req' ? [{ title: t('zapretCatalog.httpTransforms'), value: 'http' }] : []),
@@ -444,7 +461,7 @@ const httpActions = computed(() => [
 const refsFor = (id: string) => view.value?.references.filter(ref => ref.strategyRef === id) ?? []
 const isNativeOnly = (record: StrategyRecord) => view.value?.nativeOnly?.includes(record.definition.id) ?? false
 const hasManagedDependencies = (record: StrategyRecord) => !!Object.keys(record.listRefs ?? {}).length || record.definition.profiles.some(profile => !!profile.quicBlobRef)
-const transports = (record: StrategyRecord) => [...new Set(record.definition.profiles.map(profile => profile.protocol.toUpperCase()))].join(' / ')
+const transports = (record: StrategyRecord) => [...new Set(record.definition.profiles.flatMap(profileTransports))].map(protocol => protocol.toUpperCase()).join(' / ')
 function recordStatus(record: StrategyRecord) {
   const states = new Set(refsFor(record.definition.id).map(ref => ref.state))
   if (!states.size) return t('zapretCatalog.unassigned')
@@ -462,25 +479,27 @@ async function run(action: () => Promise<void>, inDialog = false) {
   finally { busy.value = false }
 }
 const refresh = () => run(async () => { view.value = await loadCatalog(); diagnostic.value = undefined; copiedEvidence.value = false })
-const dirty = computed(() => editing.value && (visualChanged.value || name.value !== originalName.value || raw.value !== originalRaw.value))
+const dirty = computed(() => editing.value && (visualChanged.value || rawRefsChanged.value || name.value !== originalName.value || raw.value !== originalRaw.value))
 const confirmDiscard = () => !dirty.value || window.confirm(t('zapretCatalog.discardDraft'))
 const warnUnload = (event: BeforeUnloadEvent) => { if (dirty.value) event.preventDefault() }
 onMounted(() => { window.addEventListener('beforeunload', warnUnload); void refresh() })
 onUnmounted(() => window.removeEventListener('beforeunload', warnUnload))
 onBeforeRouteLeave(confirmDiscard)
 onBeforeRouteUpdate((to, from) => to.params.hostId === from.params.hostId || confirmDiscard())
-watch([name, raw, rows], () => { effective.value = undefined }, { deep: true })
+watch([name, raw, rows, rawRefs], () => { effective.value = undefined }, { deep: true })
 function listText(lists: Profile['lists'] = {}): Row['lists'] {
   return { hostList: lists.hostList?.join('\n') ?? '', hostListExclude: lists.hostListExclude?.join('\n') ?? '',
     ipSet: lists.ipSet?.join('\n') ?? '', ipSetExclude: lists.ipSetExclude?.join('\n') ?? '' }
 }
 function withRows(record?: StrategyRecord) {
   rawRefs.value = { ...record?.listRefs }
+  rawProfileIDs.value = record?.definition.profiles.map(p => p.id) ?? []
   rows.value = (record?.definition.profiles ?? []).map(p => {
     const refs = { ...rawRefs.value[p.id] }
     const lists = listText(p.lists)
     for (const field of listFields) if (refs[field]) lists[field] = ''
-    return { key: ++rowKey, id: p.id, protocol: p.protocol, family: p.family ?? '', ports: p.ports.join(','),
+    return { key: ++rowKey, id: p.id, protocol: p.udpPorts?.length ? 'tcp+udp' : p.protocol, family: p.family ?? '',
+      ports: p.ports.join(','), udpPorts: p.udpPorts?.join(',') ?? '',
       payload: p.payload ?? '', splitAt: String(p.splitAt ?? 9), quicRepeats: String(p.quicRepeats ?? 1), quicBlobRef: p.quicBlobRef ?? '',
       outRange: p.outRange ?? '', rangeInitiallyOpen: !!p.outRange || p.httpActions?.some(action => !!action.outRange),
       ...(p.circular ? { circular: { failures: String(p.circular.failures), splits: p.circular.splits.join(',') } } : {}),
@@ -492,19 +511,34 @@ function setListRef(row: Row, field: NativeListField, value: string | null) {
   else delete row.refs[field]
   visualChanged.value = true
 }
-function changeProtocol(row: Row, protocol: Profile['protocol']) {
+function setRawListRef(profile: string, field: NativeListField, value: string | null) {
+  const refs = { ...rawRefs.value[profile] }
+  if (value) refs[field] = value
+  else delete refs[field]
+  if (Object.keys(refs).length) rawRefs.value[profile] = refs
+  else delete rawRefs.value[profile]
+  rawRefsChanged.value = true
+}
+function changeProtocol(row: Row, protocol: RowProtocol) {
   if (row.protocol === protocol) return
+  if (row.protocol === 'udp' && protocol === 'tcp+udp') {
+    row.udpPorts = row.ports
+    row.ports = ''
+  } else if (row.protocol === 'tcp+udp' && protocol === 'udp') {
+    row.ports = row.udpPorts
+  }
+  if (protocol !== 'tcp+udp') row.udpPorts = ''
   row.protocol = protocol
-  row.payload = ''
-  delete row.circular
-  delete row.httpActions
-  row.quicBlobRef = ''
-  row.outRange = ''
+  if ((protocol === 'tcp' && row.payload === 'quic_initial') || (protocol === 'udp' && row.payload !== 'quic_initial')) {
+    changePayload(row, '')
+  }
   visualChanged.value = true
 }
 function changePayload(row: Row, payload: Row['payload']) {
   row.payload = payload ?? ''
   if (payload !== 'http_req') delete row.httpActions
+  if (payload !== 'tls_client_hello' && payload !== 'http_req') delete row.circular
+  if (payload !== 'quic_initial') row.quicBlobRef = ''
   if (!payload) row.outRange = ''
   visualChanged.value = true
 }
@@ -540,7 +574,7 @@ function reverseHTTPActions(row: Row) {
 function addProfile() {
   let index = 1
   while (rows.value.some(row => row.id === `profile-${index}`)) index++
-  rows.value.push({ key: ++rowKey, id: `profile-${index}`, protocol: 'tcp', family: '', ports: '443', payload: '', splitAt: '9', quicRepeats: '1', quicBlobRef: '', outRange: '', lists: listText(), refs: {} })
+  rows.value.push({ key: ++rowKey, id: `profile-${index}`, protocol: 'tcp', family: '', ports: '443', udpPorts: '', payload: '', splitAt: '9', quicRepeats: '1', quicBlobRef: '', outRange: '', lists: listText(), refs: {} })
   visualChanged.value = true
 }
 function remove(index: number) { rows.value.splice(index, 1); visualChanged.value = true }
@@ -550,7 +584,7 @@ function move(index: number, offset: number) {
   visualChanged.value = true
 }
 function preset(payload: NonNullable<Profile['payload']>, ports: string) {
-  rows.value = [{ key: ++rowKey, id: 'profile-1', protocol: payload === 'quic_initial' ? 'udp' : 'tcp', family: '', ports, payload,
+  rows.value = [{ key: ++rowKey, id: 'profile-1', protocol: payload === 'quic_initial' ? 'udp' : 'tcp', family: '', ports, udpPorts: '', payload,
     splitAt: '9', quicRepeats: '1', quicBlobRef: '', outRange: '', lists: listText(), refs: {} }]
   mode.value = 'visual'
   visualChanged.value = true
@@ -566,6 +600,7 @@ function openDraft(record?: StrategyRecord, clone = false) {
   mode.value = rawLocked.value ? 'raw' : 'visual'
   dialogError.value = ''
   withRows(record)
+  rawRefsChanged.value = false
   if (!record) addProfile()
   visualChanged.value = false
   editing.value = true
@@ -587,7 +622,8 @@ function draft() {
       const entries = row.lists[field].split(/[\s,]+/).filter(Boolean)
       if (entries.length) lists[field] = entries
     }
-    return { id: row.id.trim(), protocol: row.protocol, ports: parsePorts(row.ports),
+    return { id: row.id.trim(), protocol: row.protocol === 'udp' ? 'udp' : 'tcp', ports: parsePorts(row.ports),
+      ...(row.protocol === 'tcp+udp' ? { udpPorts: parsePorts(row.udpPorts) } : {}),
       ...(row.payload && !row.circular && !row.httpActions && row.outRange ? { outRange: row.outRange } : {}),
       ...(row.family ? { family: row.family } : {}), ...(row.payload === 'quic_initial' ? { payload: row.payload, quicRepeats: Number(row.quicRepeats),
         ...(row.quicBlobRef ? { quicBlobRef: row.quicBlobRef } : {}) }
@@ -611,7 +647,11 @@ function parsePorts(input: string) {
   return ports
 }
 const previewDraft = () => preview({ ...draft(), name: name.value.trim() || 'Preview' }, editorRevision.value)
-const validateDraft = () => run(async () => { effective.value = await previewDraft() }, true)
+const validateDraft = () => run(async () => {
+  const record = await previewDraft()
+  if (mode.value === 'raw') rawProfileIDs.value = record.definition.profiles.map(p => p.id)
+  effective.value = record
+}, true)
 async function switchMode(next: 'visual' | 'raw') {
   if (next === mode.value) return
   await run(async () => {

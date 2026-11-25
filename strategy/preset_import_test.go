@@ -41,7 +41,8 @@ func TestPresetPackageMapsDependenciesAndRoundTrips(t *testing.T) {
 		t.Fatal("preparation mutated the current catalog or did not make a valid candidate")
 	}
 	if !slices.Equal(preview.Dependencies, []PresetDependency{
-		{"lists/site.txt", "site", "hostList", "new"}, {"blobs/fixture.hex", "fixture", "blob", "new"},
+		{Source: "lists/site.txt", ID: "site", Kind: "hostList", State: "new", CanRename: true},
+		{Source: "blobs/fixture.hex", ID: "fixture", Kind: "blob", State: "new", CanRename: true},
 	}) {
 		t.Fatalf("dependency plan lost references: %+v", preview.Dependencies)
 	}
@@ -80,6 +81,57 @@ func TestPresetPackageMapsDependenciesAndRoundTrips(t *testing.T) {
 	clone, review, err := next.PreparePreset("copy", input)
 	if err != nil || review.Record == nil || len(clone.Records) != 2 || len(review.Dependencies) != 2 || review.Dependencies[0].State != "reuse" || review.Dependencies[1].State != "reuse" {
 		t.Fatalf("existing identical dependencies were not reused: %+v, %v", review, err)
+	}
+}
+
+func presetBinaryFixture(t *testing.T, blob string) []byte {
+	t.Helper()
+	return presetZIP(t, []zipSource{
+		{name: "strategy.txt", contents: strings.Replace(portablePreset, "blobs/fixture.hex", "blobs/fixture.bin", 1)},
+		{name: "lists/site.txt", contents: "Example.test\n"},
+		{name: "blobs/fixture.bin", contents: blob},
+	})
+}
+
+func TestPresetPackageRepairsListAndBinaryConflicts(t *testing.T) {
+	base := emptyPresetCatalog()
+	base.Lists = map[string]NamedList{"site": {Kind: HostListKind, Entries: []string{"other.test"}}}
+	base.BlobAssets = map[string]string{"fixture": "40"}
+	before := base.Revision()
+	input := PresetInput{Format: "zip", Content: presetBinaryFixture(t, "\xff\x00\x7f")}
+	_, preview, err := base.PreparePreset("imported", input)
+	if err != nil || preview.Record != nil || len(preview.Dependencies) != 2 ||
+		!slices.EqualFunc(preview.Dependencies, []string{"lists/site.txt", "blobs/fixture.bin"}, func(dep PresetDependency, path string) bool {
+			return dep.Source == path && dep.State == "conflict" && dep.CanRename
+		}) {
+		t.Fatalf("expected actionable list and binary conflicts: %+v, %v", preview, err)
+	}
+	input.DependencyIDs = []PresetDependencyID{{"lists/site.txt", "imported-list"}, {"blobs/fixture.bin", "imported-blob"}}
+	next, preview, err := base.PreparePreset("imported", input)
+	if err != nil || preview.Record == nil || base.Revision() != before || next.Validate() != nil {
+		t.Fatalf("renamed assets failed to validate or modified the live catalog: %+v, %v", preview, err)
+	}
+	record := preview.Record
+	if record.ListRefs["tls"].HostList != "imported-list" || record.Definition.BlobData["imported-blob"] != "ff007f" ||
+		!strings.Contains(record.Raw, "fake:blob=asset_imported-blob:") || !strings.Contains(record.Raw, "# Author comment\r\n") ||
+		!slices.Equal(next.Lists["site"].Entries, []string{"other.test"}) || next.BlobAssets["fixture"] != "40" {
+		t.Fatalf("explicit ID choice changed data or replaced a current dependency: %+v", record)
+	}
+	packaged, err := next.ExportPackage("imported")
+	if err != nil {
+		t.Fatal(err)
+	}
+	copy, reviewed, err := base.PreparePreset("imported", PresetInput{Format: "zip", Content: packaged})
+	if err != nil || reviewed.Record == nil || copy.Revision() != next.Revision() {
+		t.Fatalf("ZIP round trip lost renamed IDs or binary bytes: %+v, %v", reviewed, err)
+	}
+	input.DependencyIDs = append(input.DependencyIDs, PresetDependencyID{"lists/not-included.txt", "ignored"})
+	if _, preview, err = base.PreparePreset("imported", input); err != nil || preview.Record != nil ||
+		!slices.ContainsFunc(preview.Issues, func(issue PresetIssue) bool { return issue.Code == "unbound-dependency-id" }) {
+		t.Fatalf("unused explicit ID was silently ignored: %+v, %v", preview, err)
+	}
+	if _, err := readPresetPackage(presetBinaryFixture(t, strings.Repeat("x", MaxNativeBlobBytes+1))); err == nil {
+		t.Fatal("binary asset exceeded the bounded per-entry size")
 	}
 }
 
@@ -168,12 +220,35 @@ func TestStoredAssetsUseCatalogBudgetNotSimultaneousActivationLimits(t *testing.
 func TestFrozenTemplatesAdmitOnlyAdaptedDefinitions(t *testing.T) {
 	for _, template := range PresetTemplates() {
 		t.Run(template.ID, func(t *testing.T) {
-			_, review, err := emptyPresetCatalog().PreparePreset("template-copy", PresetInput{Format: "template", TemplateID: template.ID})
+			base := emptyPresetCatalog()
+			next, review, err := base.PreparePreset("template-copy", PresetInput{Format: "template", TemplateID: template.ID})
 			if err != nil || (review.Record != nil) != (template.Compatibility == "adapted") || len(review.Profiles) != template.Profiles {
 				t.Fatalf("template metadata does not match owner validation: %+v, %v", review, err)
 			}
-			if review.Record != nil && !review.Record.VisualEditable() {
+			if review.Record == nil {
+				return
+			}
+			if !review.Record.VisualEditable() {
 				t.Fatal("an adapted template needs to be editable in both modes")
+			}
+			origin := review.Record.Origin
+			if origin == nil || origin.TemplateID != template.ID || origin.ReferenceCommit != template.Commit ||
+				origin.ReferenceVersion != template.Version || origin.SHA256 != fixtureDigest(template.source) {
+				t.Fatalf("saved template lost its immutable source reference: %+v", origin)
+			}
+			editedRaw := review.Record.Raw + "# User note\n"
+			edited, err := next.SealDraft(Draft{ID: "template-copy", Name: "Renamed", Raw: &editedRaw})
+			if err != nil || edited.Origin == nil || *edited.Origin != *origin || edited.Definition.Revision != review.Record.Definition.Revision {
+				t.Fatalf("edit replaced template provenance or the action revision: %v", err)
+			}
+			next.Records["template-copy"] = edited
+			data, err := next.ExportPackage("template-copy")
+			if err != nil {
+				t.Fatal(err)
+			}
+			copy, preview, err := base.PreparePreset("template-copy", PresetInput{Format: "zip", Content: data})
+			if err != nil || preview.Record == nil || copy.Revision() != next.Revision() {
+				t.Fatalf("template origin or edited source did not survive the existing ZIP transfer: %+v, %v", preview, err)
 			}
 		})
 	}

@@ -9,13 +9,21 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/MalenkiySolovey/solovey-host/outbounds"
 )
 
 type PresetInput struct {
-	Format     string `json:"format"`
-	Name       string `json:"name,omitempty"`
-	TemplateID string `json:"templateId,omitempty"`
-	Content    []byte `json:"content,omitempty"`
+	Format        string               `json:"format"`
+	Name          string               `json:"name,omitempty"`
+	TemplateID    string               `json:"templateId,omitempty"`
+	Content       []byte               `json:"content,omitempty"`
+	DependencyIDs []PresetDependencyID `json:"dependencyIds,omitempty"`
+}
+
+type PresetDependencyID struct {
+	Path string `json:"path"` // Exact ZIP member. It is data, not a JSON field name.
+	ID   string `json:"id"`
 }
 
 type PresetIssue struct {
@@ -26,10 +34,11 @@ type PresetIssue struct {
 }
 
 type PresetDependency struct {
-	Source string `json:"source"`
-	ID     string `json:"id"`
-	Kind   string `json:"kind"`
-	State  string `json:"state"` // new, reuse, conflict, or missing
+	Source    string `json:"source"`
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	State     string `json:"state"` // new, reuse, conflict, or missing
+	CanRename bool   `json:"canRename,omitempty"`
 }
 
 type PresetProfile struct {
@@ -40,6 +49,7 @@ type PresetProfile struct {
 
 type PresetPreview struct {
 	Source       string             `json:"source,omitempty"`
+	Origin       *PresetOrigin      `json:"origin,omitempty"`
 	Profiles     []PresetProfile    `json:"profiles,omitempty"`
 	Issues       []PresetIssue      `json:"issues,omitempty"`
 	Dependencies []PresetDependency `json:"dependencies,omitempty"`
@@ -66,19 +76,23 @@ func (c Catalog) PreparePreset(id string, input PresetInput) (Catalog, PresetPre
 	if len(input.Content) > MaxPresetBytes {
 		return Catalog{}, PresetPreview{}, fmt.Errorf("preset has %d bytes; import limit is %d bytes", len(input.Content), MaxPresetBytes)
 	}
+	dependencyIDs, err := input.dependencyMap()
+	if err != nil {
+		return Catalog{}, PresetPreview{}, err
+	}
 	if input.Format == "template" && input.TemplateID != "" && len(input.Content) == 0 {
 		template, ok := findTemplate(input.TemplateID)
 		if !ok {
 			return Catalog{}, PresetPreview{}, errors.New("preset template does not exist")
 		}
-		return c.prepareNativePreset(id, firstName(input.Name, template.Name), template.source, nil)
+		return c.prepareNativeSource(id, firstName(input.Name, template.Name), nativePresetSource{text: template.source, origin: template.savedOrigin()})
 	}
 	if input.TemplateID != "" || len(input.Content) == 0 {
 		return Catalog{}, PresetPreview{}, errors.New("select one preset source")
 	}
 	switch input.Format {
 	case "native":
-		return c.prepareNativePreset(id, input.Name, string(input.Content), nil)
+		return c.prepareNativeSource(id, input.Name, nativePresetSource{text: string(input.Content)})
 	case "json":
 		return c.prepareTransferPreset(id, input.Name, input.Content)
 	case "zip":
@@ -86,17 +100,46 @@ func (c Catalog) PreparePreset(id string, input PresetInput) (Catalog, PresetPre
 		if err != nil {
 			return Catalog{}, PresetPreview{}, err
 		}
+		if _, ok := files["manifest.json"]; ok {
+			return c.prepareGUIPreset(id, input.Name, input.Content, files, dependencyIDs)
+		}
 		if encoded, ok := files["strategy.json"]; ok && len(files) == 1 {
+			if len(input.DependencyIDs) != 0 {
+				return Catalog{}, PresetPreview{}, errors.New("dependency IDs cannot rewrite a sealed strategy transfer")
+			}
 			return c.prepareTransferPreset(id, input.Name, encoded)
 		}
 		if source, ok := files["strategy.txt"]; ok && files["strategy.json"] == nil {
 			delete(files, "strategy.txt")
-			return c.prepareNativePreset(id, input.Name, string(source), files)
+			return c.prepareNativeSource(id, input.Name, nativePresetSource{text: string(source), files: files, dependencyIDs: dependencyIDs})
 		}
 		return Catalog{}, PresetPreview{}, errors.New("ZIP must contain either strategy.json alone or strategy.txt with its data dependencies")
 	default:
 		return Catalog{}, PresetPreview{}, errors.New("unknown preset format")
 	}
+}
+
+func (input PresetInput) dependencyMap() (map[string]string, error) {
+	if len(input.DependencyIDs) == 0 {
+		return nil, nil
+	}
+	if input.Format != "zip" || len(input.DependencyIDs) > maxPresetEntries {
+		return nil, errors.New("dependency IDs apply only to files in one preset archive")
+	}
+	ids := make(map[string]string, len(input.DependencyIDs))
+	for _, override := range input.DependencyIDs {
+		if len(override.Path) == 0 || len(override.Path) > len("lists/")+maxGUIFileNameBytes {
+			return nil, errors.New("dependency ID override must name one preset archive member")
+		}
+		if !outbounds.ValidZapretStrategyRef(override.ID) {
+			return nil, errors.New("choose a managed dependency ID of 1 to 64 lowercase letters, digits or hyphens")
+		}
+		if _, exists := ids[override.Path]; exists {
+			return nil, fmt.Errorf("more than one managed ID was specified for the same archive path %q", override.Path)
+		}
+		ids[override.Path] = override.ID
+	}
+	return ids, nil
 }
 
 func firstName(name, fallback string) string {
@@ -120,10 +163,10 @@ func (c Catalog) prepareTransferPreset(id, name string, data []byte) (Catalog, P
 				state = "conflict"
 			}
 		}
-		p.Dependencies = append(p.Dependencies, PresetDependency{key, key, string(list.Kind), state})
+		p.Dependencies = append(p.Dependencies, PresetDependency{Source: key, ID: key, Kind: string(list.Kind), State: state})
 	}
 	for key, data := range transfer.BlobAssets {
-		p.Dependencies = append(p.Dependencies, PresetDependency{key, key, "blob", c.blobImportState(key, data)})
+		p.Dependencies = append(p.Dependencies, PresetDependency{Source: key, ID: key, Kind: "blob", State: c.blobImportState(key, data)})
 	}
 	slices.SortFunc(p.Dependencies, func(a, b PresetDependency) int {
 		if result := strings.Compare(a.Kind, b.Kind); result != 0 {
@@ -154,6 +197,11 @@ func finishPreset(c Catalog, p PresetPreview, draft Draft, lists map[string]Name
 	if len(p.Issues) != 0 {
 		return Catalog{}, p, nil
 	}
+	if draft.origin == nil {
+		draft.origin = p.Origin
+	} else {
+		p.Origin = draft.origin
+	}
 	next, err := c.withImportedDraft(draft, lists, blobs)
 	if err != nil {
 		var option *nativeOptionError
@@ -176,20 +224,28 @@ func finishPreset(c Catalog, p PresetPreview, draft Draft, lists map[string]Name
 func decodePresetTransfer(data []byte) (Transfer, error) {
 	var t Transfer
 	invalid := errors.New("invalid Solovey strategy JSON: expected one transfer with no duplicate or unknown fields")
-	if !utf8.Valid(data) || !json.Valid(data) {
+	if err := decodePresetJSON(data, &t); err != nil {
 		return t, invalid
+	}
+	return t, nil
+}
+
+func decodePresetJSON(data []byte, target any) error {
+	invalid := errors.New("expected a single JSON object with no duplicate or unknown fields")
+	if !utf8.Valid(data) || !json.Valid(data) {
+		return invalid
 	}
 	shape := json.NewDecoder(bytes.NewReader(data))
 	shape.UseNumber()
 	if !uniquePresetJSON(shape, 0) || shape.More() {
-		return t, invalid
+		return invalid
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&t); err != nil || decoder.Decode(new(any)) != io.EOF {
-		return t, invalid
+	if err := decoder.Decode(target); err != nil || decoder.Decode(new(any)) != io.EOF {
+		return invalid
 	}
-	return t, nil
+	return nil
 }
 
 func uniquePresetJSON(decoder *json.Decoder, depth int) bool {

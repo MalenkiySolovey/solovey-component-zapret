@@ -1,10 +1,15 @@
 package strategy
 
-import "slices"
+import (
+	"crypto/sha256"
+	"fmt"
+	"slices"
+)
 
 const (
 	presetReferenceCommit  = "4934082a4069e2e66e35668cf6a03cf4c8de16d2"
 	presetReferenceVersion = "22.0.0.0"
+	presetTemplateFormat   = "solovey-zapret-template"
 )
 
 type PresetTemplate struct {
@@ -59,6 +64,14 @@ func referenceTemplate(id, name, description, category, compatibility string, pr
 }
 
 func PresetTemplates() []PresetTemplate { return slices.Clone(presetTemplates) }
+
+func (t PresetTemplate) savedOrigin() *PresetOrigin {
+	if t.Compatibility != "adapted" {
+		return nil
+	}
+	return &PresetOrigin{Format: presetTemplateFormat, Version: 1, Engine: "nfqws2", SHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(t.source))),
+		TemplateID: t.ID, ReferenceVersion: t.Version, ReferenceCommit: t.Commit}
+}
 
 func findTemplate(id string) (PresetTemplate, bool) {
 	for _, value := range presetTemplates {
