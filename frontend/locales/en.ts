@@ -59,6 +59,7 @@ export default { zapretCatalog: {
   dependencies: 'Managed dependencies', dependencyKind: { hostList: 'HostList', ipSet: 'IPSet', blob: 'Asset' },
   dependencyState: { new: 'Create', reuse: 'Reuse', conflict: 'Conflict', missing: 'Missing' },
   originalSource: 'Original source', convertedSource: 'Converted native options', templateSource: 'Template source', importTooLarge: 'The selected import exceeds {max} KiB.',
+  archiveOrigin: 'ZapretGUI archive source',
   exportFormats: 'More export options', exportZip: 'Export ZIP with dependencies', exportNative: 'Export native text',
   storage: '{used} / {limit} bytes used', searchAssets: 'Search lists and assets', nativeFilterScope: 'These filters apply only to the native strategy. Routing rules are unchanged.',
   noBindings: 'No outbound references a strategy.', diagnostics: 'Diagnostics', runtimeDetails: 'Runtime details',

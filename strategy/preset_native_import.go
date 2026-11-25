@@ -14,6 +14,7 @@ type nativePresetPlan struct {
 	catalog Catalog
 	preview PresetPreview
 	files   map[string][]byte
+	gui     *guiPresetSource
 	used    map[string]bool
 	edits   map[int]string
 	lists   map[string]NamedList
@@ -28,14 +29,21 @@ type presetBlob struct {
 }
 
 func (c Catalog) prepareNativePreset(id, name, raw string, files map[string][]byte) (Catalog, PresetPreview, error) {
+	return c.prepareNativeSource(id, name, raw, files, nil)
+}
+
+func (c Catalog) prepareNativeSource(id, name, raw string, files map[string][]byte, gui *guiPresetSource) (Catalog, PresetPreview, error) {
 	if len(raw) > MaxNativeReviewBytes {
 		return Catalog{}, PresetPreview{}, fmt.Errorf("native source has %d bytes; preview limit is %d bytes", len(raw), MaxNativeReviewBytes)
 	}
 	if !utf8.ValidString(raw) {
 		return Catalog{}, PresetPreview{}, fmt.Errorf("native preset must be UTF-8 text")
 	}
-	p := nativePresetPlan{catalog: c, preview: PresetPreview{Source: raw}, files: files, used: map[string]bool{},
+	p := nativePresetPlan{catalog: c, preview: PresetPreview{Source: raw}, files: files, gui: gui, used: map[string]bool{},
 		edits: map[int]string{}, lists: map[string]NamedList{}, blobs: map[string]string{}, decl: map[string]presetBlob{}, refs: ListRefs{}}
+	if gui != nil {
+		p.preview.Origin = &gui.origin
+	}
 	tokens, err := nativeSource(raw)
 	if err != nil {
 		p.preview.issue(nil, "invalid-source", err.Error())
@@ -249,12 +257,16 @@ func (p *nativePresetPlan) mapList(token sourceToken, key, value string, refs *N
 		return
 	}
 	value = unquotePresetPath(value)
+	kind := fileListKind(key)
+	if p.gui != nil {
+		p.mapGUIList(token, value, kind, slot)
+		return
+	}
 	id := presetAssetID(value, "lists/", ".txt")
 	if id == "" {
 		p.preview.issue(&token, "unsafe-list-path", "only lists/<managed-id>.txt can map to a managed list; no host filesystem paths or URLs are read")
 		return
 	}
-	kind := fileListKind(key)
 	state, err := p.prepareList(value, id, kind)
 	p.preview.Dependencies = append(p.preview.Dependencies, PresetDependency{value, id, string(kind), state})
 	if err != nil {

@@ -59,6 +59,7 @@ export default { zapretCatalog: {
   dependencies: 'Управляемые зависимости', dependencyKind: { hostList: 'HostList', ipSet: 'IPSet', blob: 'Данные' },
   dependencyState: { new: 'Создать', reuse: 'Использовать существующее', conflict: 'Конфликт', missing: 'Отсутствует' },
   originalSource: 'Исходный текст', convertedSource: 'Преобразованные параметры nfqws2', templateSource: 'Источник шаблона', importTooLarge: 'Размер импорта превышает {max} КиБ.',
+  archiveOrigin: 'Исходный архив ZapretGUI',
   exportFormats: 'Другие варианты экспорта', exportZip: 'Экспорт ZIP с зависимостями', exportNative: 'Экспорт параметров nfqws2',
   storage: 'Использовано {used} из {limit} байт', searchAssets: 'Поиск списков и данных', nativeFilterScope: 'Фильтры действуют только в стратегии движка. Правила маршрутизации не меняются.',
   noBindings: 'Нет исходящих подключений с привязанной стратегией.', diagnostics: 'Диагностика', runtimeDetails: 'Рабочие параметры',

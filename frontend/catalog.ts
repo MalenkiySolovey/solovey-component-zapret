@@ -9,6 +9,7 @@ export type LuaDraftView = { revision: string; drafts: Record<string, LuaDraft> 
 export type ProfileListRefs = Partial<Record<NativeListField, string>>
 export type ListRefs = Record<string, ProfileListRefs>
 export type HTTPAction = { name: 'http_domcase' | 'http_hostcase'; spell?: string; outRange?: string }
+export type PresetOrigin = { format: string; version: number; engine: string; fileName: string; sha256: string }
 
 export interface Profile {
   id: string
@@ -29,6 +30,7 @@ export interface StrategyRecord {
   raw: string
   definition: { id: string; revision: string; assets?: string[]; profiles: Profile[] }
   listRefs?: ListRefs
+  origin?: PresetOrigin
 }
 export interface StrategyReference {
   outboundRef: string
@@ -61,6 +63,7 @@ export type PresetFormat = 'template' | 'native' | 'json' | 'zip'
 export type PresetInput = { format: PresetFormat; name?: string; templateId?: string; content?: string }
 export interface PresetPreview {
   source?: string
+  origin?: PresetOrigin
   profiles?: { name?: string; line: number; options?: string[] }[]
   issues?: { option?: string; code: string; message: string; span?: { line: number; column: number; end: number } }[]
   dependencies?: { source: string; id: string; kind: string; state: 'new' | 'reuse' | 'conflict' | 'missing' }[]

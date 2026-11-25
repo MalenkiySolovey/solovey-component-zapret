@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -56,11 +57,15 @@ func readPresetPackage(data []byte) (map[string][]byte, error) {
 	if err != nil || len(archive.File) == 0 || len(archive.File) > maxPresetEntries {
 		return nil, fmt.Errorf("invalid preset package; only ZIP with 1 to %d files is accepted", maxPresetEntries)
 	}
+	entryLimit := presetEntryLimit
+	if slices.ContainsFunc(archive.File, func(entry *zip.File) bool { return entry.Name == "manifest.json" }) {
+		entryLimit = guiPresetEntryLimit
+	}
 	files := make(map[string][]byte, len(archive.File))
 	remaining := uint64(MaxPresetBytes)
 	for _, entry := range archive.File {
 		name := entry.Name
-		limit, ok := presetEntryLimit(name)
+		limit, ok := entryLimit(name)
 		if !ok || !entry.Mode().IsRegular() || entry.Flags&1 != 0 {
 			return nil, errors.New("ZIP contains an unsupported file, unsafe path, link, or encrypted entry")
 		}

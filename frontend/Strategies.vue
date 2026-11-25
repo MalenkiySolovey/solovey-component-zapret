@@ -197,6 +197,7 @@
           <v-alert v-if="dialogError" type="error" variant="tonal" class="mb-3">{{ dialogError }}</v-alert>
           <v-alert v-if="affected.length" type="warning" variant="tonal" class="mb-3">{{ t('zapretCatalog.editAffects', { refs: affected.map(ref => ref.outboundRef).join(', ') }) }}</v-alert>
           <v-text-field v-model="name" :label="t('zapretCatalog.name')" maxlength="120" :disabled="busy" />
+          <PresetOriginDetails v-if="activeOrigin" :origin="activeOrigin" />
           <div v-if="!originalRaw && !activeID && mode === 'visual' && rows.length === 1 && !rows[0]?.payload" class="d-flex flex-wrap ga-2 mb-3">
             <v-btn size="small" variant="tonal" @click="preset('tls_client_hello', '443,853')">{{ t('zapretCatalog.tlsPreset') }}</v-btn>
             <v-btn size="small" variant="tonal" @click="preset('http_req', '80')">{{ t('zapretCatalog.httpPreset') }}</v-btn>
@@ -335,6 +336,7 @@ import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import LuaDrafts from './LuaDrafts.vue'
 import PresetReview from './PresetReview.vue'
+import PresetOriginDetails from './PresetOriginDetails.vue'
 import { catalogError, diagnose, draftToSave, exportRecord, loadCatalog, presetBytes, preview, saveCatalog, type CatalogView, type ExportFormat, type HTTPAction, type ListKind, type ListRefs, type NamedList, type NativeListField, type PresetTemplate, type Profile, type ProfileListRefs, type StrategyRecord, type StrategyReference } from './catalog'
 
 const { t, te } = useI18n()
@@ -363,6 +365,7 @@ const favorites = ref<string[]>([])
 const deleteRecord = ref<StrategyRecord>()
 const editing = ref(false)
 const activeID = ref('')
+const activeOrigin = computed(() => view.value?.catalog.records[activeID.value]?.origin)
 const editorRevision = ref('')
 const editorHeading = ref<HTMLElement>()
 const editorPage = ref<HTMLElement>()

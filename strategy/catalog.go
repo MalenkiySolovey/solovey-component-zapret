@@ -25,10 +25,11 @@ const (
 // Record retains raw editor text and a separate sealed runtime definition.
 // Only Definition is ever sent across the privileged boundary.
 type Record struct {
-	Name       string   `json:"name"`
-	Raw        string   `json:"raw"`
-	Definition Strategy `json:"definition"`
-	ListRefs   ListRefs `json:"listRefs,omitempty"`
+	Name       string        `json:"name"`
+	Raw        string        `json:"raw"`
+	Definition Strategy      `json:"definition"`
+	ListRefs   ListRefs      `json:"listRefs,omitempty"`
+	Origin     *PresetOrigin `json:"origin,omitempty"`
 }
 
 // VisualEditable reports whether regenerating the native text from the typed
@@ -57,6 +58,7 @@ type Draft struct {
 	Raw      *string   `json:"raw,omitempty"`
 	Profiles []Profile `json:"profiles,omitempty"`
 	ListRefs ListRefs  `json:"listRefs,omitempty"`
+	origin   *PresetOrigin
 }
 
 // Transfer binds the strategy to the immutable engine and assets. Referenced
@@ -122,12 +124,22 @@ func (c Catalog) sealDraft(d Draft) (Record, error) {
 	if err != nil {
 		return Record{}, err
 	}
-	return c.withResolvedLists(Record{Name: d.Name, Raw: raw, Definition: definition, ListRefs: d.ListRefs})
+	origin := d.origin
+	if existing, ok := c.Records[d.ID]; ok {
+		origin = existing.Origin
+	}
+	if origin != nil {
+		origin = new(*origin)
+	}
+	return c.withResolvedLists(Record{Name: d.Name, Raw: raw, Definition: definition, ListRefs: d.ListRefs, Origin: origin})
 }
 
 func (r Record) Validate() error { return (Catalog{}).validateRecord(r) }
 
 func (c Catalog) validateRecord(r Record) error {
+	if r.Origin != nil && !r.Origin.valid() {
+		return errors.New("invalid preset origin")
+	}
 	// Keep previously stored, oversized definitions readable. New drafts
 	// must fit the broker frame before they can be saved or imported.
 	checked, err := c.sealDraft(Draft{ID: r.Definition.ID, Name: r.Name, Raw: &r.Raw, ListRefs: r.ListRefs})
@@ -177,7 +189,7 @@ func (t Transfer) Import() (Draft, error) {
 	if len(t.BlobAssets) != len(t.Strategy.Definition.BlobData) {
 		return Draft{}, errors.New("transfer includes unused native blobs")
 	}
-	return Draft{ID: t.Strategy.Definition.ID, Name: t.Strategy.Name, Raw: &t.Strategy.Raw, ListRefs: t.Strategy.ListRefs}, nil
+	return Draft{ID: t.Strategy.Definition.ID, Name: t.Strategy.Name, Raw: &t.Strategy.Raw, ListRefs: t.Strategy.ListRefs, origin: t.Strategy.Origin}, nil
 }
 
 func (c Catalog) Validate() error {

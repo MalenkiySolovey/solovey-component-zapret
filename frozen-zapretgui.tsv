@@ -1,0 +1,475 @@
+# ZapretGUI 22.0.0.0 (4934082a4069e2e66e35668cf6a03cf4c8de16d2)
+# Relative to src/presets/builtin/<engine>. References are 1-based in the dependency index below.
+# The class describes the entire original document, not individual profiles or adapted templates.
+engine	preset	gitBlob	bytes	class	listRefs	binaryRefs	luaRefs
+winws1	2025_01_06.txt	b7d641fbd7c4473b63e1f5725ce0c345d8abbf2e	2067	legacy-engine	-	-	-
+winws1	Default v1.txt	876ba2ad3bf1502a806672072e8bc7a742ecf61a	6180	legacy-engine	-	-	-
+winws1	Shigulovski.txt	484dd51e10e7cf52716905501bc38926e3474b46	746	legacy-engine	-	-	-
+winws1	Ufanet_2025_03_31.txt	a07fd1ba04d9f57735c07c88b4399b2c7c2db25d	1563	legacy-engine	-	-	-
+winws1	YTDisBystro_31_1.txt	c4b0bbf814d6f794e5f5e650f21a460c0b0f0e9b	3857	legacy-engine	-	-	-
+winws1	YTDisBystro_31_2.txt	283339ffa4258482bb29fa1b113a7178b83f1f71	3548	legacy-engine	-	-	-
+winws1	YTDisBystro_31_3.txt	e5110558f2c12c706c22edbae00722f7f71497ff	4588	legacy-engine	-	-	-
+winws1	YTDisBystro_31_4.txt	39f4003835f57e3805f6f498d66af2f69be2b7d4	4409	legacy-engine	-	-	-
+winws1	YTDisBystro_31_5.txt	6bd2f5618bae4bd6ade1025bc5a99fc07604defb	4371	legacy-engine	-	-	-
+winws1	YTDisBystro_34_1.txt	fc439371f2dc11833824d455f2b9873fc9273913	9275	legacy-engine	-	-	-
+winws1	YTDisBystro_34_2.txt	234f11325b0464874f3a8d9556083a101b601dbf	9187	legacy-engine	-	-	-
+winws1	YTDisBystro_34_3.txt	60ca751d3f553e6544f0bb2d1adc8c5fe3b73005	9176	legacy-engine	-	-	-
+winws1	YTDisBystro_34_4.txt	f08bc7110f798d7ea2f6a5cf6d0af6d132e9c9f0	8612	legacy-engine	-	-	-
+winws1	YTDisBystro_34_Amazon1.txt	7f555f17435c888c5840232c10d85ccfaba0c441	3694	legacy-engine	-	-	-
+winws1	YTDisBystro_34_Amazon2.txt	cc2389d4f7bc3603e0f8f6947abc3bcc404236b1	4032	legacy-engine	-	-	-
+winws1	YTDisBystro_34_Amazon3.txt	52dab6a56e3f1781c9f9b605f1471feaae8c7bbd	4219	legacy-engine	-	-	-
+winws1	alt1.txt	af5f36667d9126f1e62a199ce2efa4b8b6f41c7b	1812	legacy-engine	-	-	-
+winws1	alt10_190b.txt	f1a2251583a579b2f8dd0532bc70c56abc0615cf	6132	legacy-engine	-	-	-
+winws1	alt10_190b_allsites.txt	6ec1eda88828cbcf5d3cfba72d01023426f5017b	1538	legacy-engine	-	-	-
+winws1	alt1_161.txt	526aa89572e76d3877c7bb93faafcd799688afb4	3838	legacy-engine	-	-	-
+winws1	alt1_181.txt	97f834776bafd4761255801f17c52c0c4a2da58f	3620	legacy-engine	-	-	-
+winws1	alt1_182.txt	df6719ed10e392de254bf952b6c873bddc699bd3	3628	legacy-engine	-	-	-
+winws1	alt2.txt	baa41000086fea535b93c8f7e6a03a344dc0a599	1561	legacy-engine	-	-	-
+winws1	alt2_161.txt	024ca4d4be472feacda2a86966dfa123869b5196	3717	legacy-engine	-	-	-
+winws1	alt2_181.txt	9312589a4cf8b52ebfbae4f656c9e898b9f94cae	3510	legacy-engine	-	-	-
+winws1	alt2_182.txt	96de33c87b713cc135423f14105814e213ecb0de	3554	legacy-engine	-	-	-
+winws1	alt2_182_allsites.txt	3ce7fdda32d041251af705a096038aee4a278df6	1623	legacy-engine	-	-	-
+winws1	alt3.txt	7afb3da61a07523942d28b4a22d27b2b88facb99	1961	legacy-engine	-	-	-
+winws1	alt3_161.txt	642abcc8f62bb83ce7b9fbc1be512e51935c332a	3365	legacy-engine	-	-	-
+winws1	alt3_181.txt	601c7e3940a2d49aaf773dd8f0663339b163fa9c	3403	legacy-engine	-	-	-
+winws1	alt3_182.txt	a7d6510bc45a89ad24345373ea7d9392ac25d69f	3507	legacy-engine	-	-	-
+winws1	alt3_182_allsites.txt	a73d01cc8c02fea39f7256bc3e693aaf12ad6f77	3706	legacy-engine	-	-	-
+winws1	alt3_game.txt	1f62ba646a7f0d000682e0886e8c871752f49f71	1729	legacy-engine	-	-	-
+winws1	alt3_lol11.txt	7e14108bd8ae87f6b8a7ce518828245ac2fb7535	2475	legacy-engine	-	-	-
+winws1	alt4.txt	1af9602955aa1c07b4271a8ca6c40f292e5c27e2	1970	legacy-engine	-	-	-
+winws1	alt4_161.txt	255ef610a7ba923fd0e4f4d5ecabe2382dbdd09b	3942	legacy-engine	-	-	-
+winws1	alt4_181.txt	d0127a7e2b2185916e2ba7136c16cc28d36d10a6	3705	legacy-engine	-	-	-
+winws1	alt4_182.txt	1870cec4cf141d8810cc8bdbf192292367367425	3747	legacy-engine	-	-	-
+winws1	alt4_190b.txt	34b28158366a651d0a36cdb69cb284506e40726e	6446	legacy-engine	-	-	-
+winws1	alt4_190b_allsites.txt	9a60809f40c5d948891e216c97154631ea6272e7	6464	legacy-engine	-	-	-
+winws1	alt5.txt	87e416defffe6bd62ac7fb081968332184b386b8	1639	legacy-engine	-	-	-
+winws1	alt5_161.txt	c2eccdd5b550a749c7dffa274b134c703a7bb3a4	1078	legacy-engine	-	-	-
+winws1	alt5_181.txt	4bae227bc83b4d037540eb7dbc1fa52792e735a0	1137	legacy-engine	-	-	-
+winws1	alt5_182.txt	a02b1683d324beadceec790f0a99db063e312951	1145	legacy-engine	-	-	-
+winws1	alt5_190b_allsites.txt	bc9831019762e6b7cd28475aa8cf54d2129c12b5	1282	legacy-engine	-	-	-
+winws1	alt6_181.txt	2f55598a04446d721b5d56109b9cca211f6cb8e8	4183	legacy-engine	-	-	-
+winws1	alt6_182.txt	665b5f83c1959160b0aae52265c49623d15ae77d	4231	legacy-engine	-	-	-
+winws1	alt6_190b.txt	c33952ba0783c790409efcedfbb3322d69ace144	6086	legacy-engine	-	-	-
+winws1	alt6_190b_allsites.txt	a89e1485c7c8bfbf7dad06a2ac447106824f6ff9	3137	legacy-engine	-	-	-
+winws1	alt7_190b.txt	8237470107f93c72bf62398424f532409675fc28	5941	legacy-engine	-	-	-
+winws1	alt7_190b_allsite.txt	be85f6c4258e9dfc123f930bdeb095a3220089db	1542	legacy-engine	-	-	-
+winws1	alt8_190b.txt	90629fafa050278134075cc329e3cb8be36dae94	5786	legacy-engine	-	-	-
+winws1	alt8_190b_allsites.txt	7ba2fd17aab373cc2836eaa03c454e43f9acba92	1254	legacy-engine	-	-	-
+winws1	alt9_190b.txt	4fb3b26942321bbebf4f59ec3f8c11c0a2961fb4	5660	legacy-engine	-	-	-
+winws1	alt9_190b_allsites.txt	7204281ca14ed8b08a20580c5024c77d7d92311f	1226	legacy-engine	-	-	-
+winws1	alt_190b.txt	f41434ed5eddd924a311a0bd271dfa0affda5f9b	6056	legacy-engine	-	-	-
+winws1	alt_190b_allsites.txt	ed9aa9248151ec93f6f1bde14dcf22dd164568ac	3739	legacy-engine	-	-	-
+winws1	alt_faketlsautoalt2_190b.txt	f378eb32b0957d773b7d21117de0951391c2b5dd	7905	legacy-engine	-	-	-
+winws1	alt_faketlsautoalt2_190b_allsites.txt	9c34bb24d91b69e31ca258b7c00967b6f58fd69e	8410	legacy-engine	-	-	-
+winws1	alt_faketlsautoalt3_190b.txt	47620d1a2efd6974eab246d60fc8b2cc76a15840	7303	legacy-engine	-	-	-
+winws1	alt_faketlsautoalt3_190b_allsites.txt	ef3fbf64e790e7ec67acd8ebd590e529b07d525d	7765	legacy-engine	-	-	-
+winws1	alt_faketlsautoalt_190b.txt	c729b85d9c19dd31ce910608aeca218782bd34ec	6461	legacy-engine	-	-	-
+winws1	alt_faketlsautoalt_190b_allsites.txt	fe16e392d159c5a3c32fb04317904046334e328a	6863	legacy-engine	-	-	-
+winws1	alt_general_faketlsauto.txt	69b9ce3548767246769441a7e6f32f193562748a	6069	legacy-engine	-	-	-
+winws1	alt_general_faketlsauto_allsites.txt	d1a876c30ca1919b8757d51b82be7c44ff283d3e	3928	legacy-engine	-	-	-
+winws1	alt_simplefake_190b.txt	adf2e45a6ab5c4aaa50655c13ca34b661def3366	5406	legacy-engine	-	-	-
+winws1	alt_simplefake_190b_allsites.txt	e0e4b5bd690b36bba6313de7daf30226ee99c5f5	6107	legacy-engine	-	-	-
+winws1	alt_simplefakealt_190b.txt	ca4a364bc5e5c81df0e3c3342d9830fda95d828d	6014	legacy-engine	-	-	-
+winws1	alt_simplefakealt_190b_allsites.txt	a0b908b6e9f9b33da6ead7b482f0ee4dd1d478c6	6385	legacy-engine	-	-	-
+winws1	altmgts1_161.txt	d5bc9f2c357a9be7a53d1743250171d788005a88	3579	legacy-engine	-	-	-
+winws1	altmgts2_161.txt	0d63eedcbcf460ea491ba3b4a23abd9f09969b78	3442	legacy-engine	-	-	-
+winws1	ankddev10.txt	83ddba441883181808f6b805bb250076c92c0617	1481	legacy-engine	-	-	-
+winws1	bolvan_allport.txt	5b4708171ccde83313f4e8ca3e95ee989155757b	1661	legacy-engine	-	-	-
+winws1	bystro292_1.txt	1647b3b60f725511d5f2b083fce971bcea21e99d	2795	legacy-engine	-	-	-
+winws1	bystro292_2.txt	61a9c3990fb21545d35f57c0b6c99aae6ff29dad	2798	legacy-engine	-	-	-
+winws1	datanoackpadencap.txt	dcac557a871913a44ece8ad1602b4c11084408a4	4398	legacy-engine	-	-	-
+winws1	datanoackpadencapmidsld.txt	683f18d4158534defda278ef484c306f63866445	4454	legacy-engine	-	-	-
+winws1	datanoackpadencapmidsldwssize.txt	1e0d40e91a524334a20e60aedc24c2071a403abd	1274	legacy-engine	-	-	-
+winws1	discord_voice_badseq.txt	20517a614b3fee84f49e608aa2a8b954be0aa590	2341	legacy-engine	-	-	-
+winws1	discord_voice_dtls.txt	03f06460b51f6180e04d6f6046911835c054395f	1511	legacy-engine	-	-	-
+winws1	discord_voice_md5sig_badseq.txt	9539c2dbfae895c94783725edf6436cfc820f879	2397	legacy-engine	-	-	-
+winws1	discordfake.txt	447d403d5d31330590cdbc83aba726a4efbe6d8f	1730	legacy-engine	-	-	-
+winws1	discordfakesplit.txt	2e7383af063789f25fc11bdbfc438529a1bd5bec	1630	legacy-engine	-	-	-
+winws1	discordtcp80.txt	1cb629a5c0d3b45a31da03c9cb7ed2c275541ea0	1580	legacy-engine	-	-	-
+winws1	faketlsalt2_181.txt	0de4c0eebe42cf42386a3fefbd8cbe94373f904a	4459	legacy-engine	-	-	-
+winws1	faketlsalt_181.txt	93ede34584ceee44c3f6f01116329be7471c878e	3427	legacy-engine	-	-	-
+winws1	faketlsalt_182.txt	8fb0fdfa8ee14cddc296a44e04a0927abe495dcf	2776	legacy-engine	-	-	-
+winws1	faketlsauto_181.txt	5d8edb0fac455488a584aad1b4bcb081589da0a0	3579	legacy-engine	-	-	-
+winws1	faketlsautoalt.txt	72e9d92e3c49e4394bb018ebaf1d87142221c33a	3577	legacy-engine	-	-	-
+winws1	faketlsmod.txt	da0526ca70c5b960b4880aaaa635c9ec8544edad	1333	legacy-engine	-	-	-
+winws1	faketlsmod2.txt	278e77c612321336f28f466db546a5b0800f398e	1344	legacy-engine	-	-	-
+winws1	general 1.10.3 (game filter).txt	5b8c742c22f4bb8a195de5e89cbf7dd5cafba463	14313	legacy-engine	-	-	-
+winws1	general 1.9.9a (game filter).txt	748d285c3393ba9eeedd2657f4e31c5e071bdf8a	14362	legacy-engine	-	-	-
+winws1	general ALT1 1.10.3 (game filter).txt	a63759a6a9fdfacfaf524f66de9d13cfcc4ca06b	17596	legacy-engine	-	-	-
+winws1	general ALT1 1.9.9a (game filter).txt	e08dc14e82f53d7b41f4cfeefd7a848c4b523b7e	17125	legacy-engine	-	-	-
+winws1	general ALT10 1.10.3 (game filter).txt	e308b9dd9b76cfd9fe206b1c4146034c7b8c5ed9	16232	legacy-engine	-	-	-
+winws1	general ALT10 1.9.9a (game filter).txt	b1b9b4631436cc9c1ca5b8910fdfe685a7696d10	15796	legacy-engine	-	-	-
+winws1	general ALT11 1.10.3 (game filter).txt	1001e588cf49be33ea1dd8417fe7d60569dc8f94	19510	legacy-engine	-	-	-
+winws1	general ALT11 1.9.9a (game filter).txt	608f4bc1183670fd03767f80ec6e03a2ffd8a7b2	19051	legacy-engine	-	-	-
+winws1	general ALT12 1.10.3 (game filter).txt	e335d621c9bdeb8e8559ea0bf2e589d3092a58e2	19358	legacy-engine	-	-	-
+winws1	general ALT12 1.9.9a (game filter).txt	2b1216f5d7adbe8e90b44ba940a8f8c0cf3a55b3	18927	legacy-engine	-	-	-
+winws1	general ALT13 1.10.3 (game filter).txt	6f778d1218c62b2959311117deaf1dd7e4bc0c58	18112	legacy-engine	-	-	-
+winws1	general ALT2 1.10.3 (game filter).txt	44c899803d7bfcae74dcf0dd30036f9e5fc66c8b	14479	legacy-engine	-	-	-
+winws1	general ALT2 1.9.9a (game filter).txt	4fb8dbccca2e4f4719bc36d52242b2674959a2f8	14528	legacy-engine	-	-	-
+winws1	general ALT3 1.10.3 (game filter).txt	9cc788c58b097a78298c3522addca78e82a3b0a5	16142	legacy-engine	-	-	-
+winws1	general ALT3 1.9.9a (game filter).txt	ca7c426bc4317988fe97e7b6e93ea5ed846956a3	15906	legacy-engine	-	-	-
+winws1	general ALT4 1.10.3 (game filter).txt	1a2cff77ac3e9ac19187a28b5ad3c2d9c275439e	17646	legacy-engine	-	-	-
+winws1	general ALT4 1.9.9a (game filter).txt	0de8651814b1bc0648228ea0deca79b6593a5812	17175	legacy-engine	-	-	-
+winws1	general ALT5 1.10.3 (game filter).txt	0bcaa490b7e1201163121019200f97e2248ea7bd	7788	legacy-engine	-	-	-
+winws1	general ALT5 1.9.9a (game filter).txt	50c0a0fa61d0df02ed06b72f510e44eb7f13a56d	7837	legacy-engine	-	-	-
+winws1	general ALT6 1.10.3 (game filter).txt	280ac895beb1ec93d0a5c840c68294928a10a761	14479	legacy-engine	-	-	-
+winws1	general ALT6 1.9.9a (game filter).txt	5383d9daaa3da8453b1113572122b7fc0ed5dd93	14528	legacy-engine	-	-	-
+winws1	general ALT7 1.10.3 (game filter).txt	5c66318baa24811984c9fdb1a284efe36de82203	13304	legacy-engine	-	-	-
+winws1	general ALT7 1.9.9a (game filter).txt	2e551834579ff9786b0b9954f76d4723a5c68e0b	13353	legacy-engine	-	-	-
+winws1	general ALT8 1.10.3 (game filter).txt	b35ad71b1fb3a414ff1969f10837932fda54dac0	15506	legacy-engine	-	-	-
+winws1	general ALT8 1.9.9a (game filter).txt	9684ca771e546c0ebefff05d0e7d161f73c94342	15270	legacy-engine	-	-	-
+winws1	general ALT9 1.10.3 (game filter).txt	d9a7a3f2f1b4e1a32e488c487c011dd6542b8afa	13734	legacy-engine	-	-	-
+winws1	general ALT9 1.9.9a (game filter).txt	a2b5c12acfe92d950e9d61c85752def6c974fdec	13783	legacy-engine	-	-	-
+winws1	general EXP 1.10.0 (game filter).txt	efd3f7fd7de678d4fb1b8a2b0fdeb58b27d47b48	20459	legacy-engine	-	-	-
+winws1	general EXP 1.10.3 (game filter).txt	d0bfd3ad2c048af78719d9188d0992ef3c57ba61	20510	legacy-engine	-	-	-
+winws1	general FAKE TLS AUTO 1.10.3 (game filter).txt	0ecd12193beffae1dfdc53a37c2596b13ba51c30	18143	legacy-engine	-	-	-
+winws1	general FAKE TLS AUTO 1.9.9a (game filter).txt	51995bc92ee16e316c05b918ec778627dd8c4775	17722	legacy-engine	-	-	-
+winws1	general FAKE TLS AUTO ALT 1.10.3 (game filter).txt	6c96388594c6361b2cd7c167958d9d70a8a850ce	17062	legacy-engine	-	-	-
+winws1	general FAKE TLS AUTO ALT 1.9.9a (game filter).txt	680d7a681b9d527a291ca61c7707955f9aa060de	16826	legacy-engine	-	-	-
+winws1	general FAKE TLS AUTO ALT2 1.10.3 (game filter).txt	b79da02bb405168744ed6f3f35ec58c8139e1510	19813	legacy-engine	-	-	-
+winws1	general FAKE TLS AUTO ALT2 1.9.9a (game filter).txt	e7242736634c698b45d1f6b75913fa9e68d28373	19577	legacy-engine	-	-	-
+winws1	general FAKE TLS AUTO ALT3 1.10.3 (game filter).txt	e96b829d9ac88685bcf8960c87825dfa88f46591	18738	legacy-engine	-	-	-
+winws1	general FAKE TLS AUTO ALT3 1.9.9a (game filter).txt	afc6f82c6a33f3d364c55acc002458a4bd2a1e17	18502	legacy-engine	-	-	-
+winws1	general SIMPLE FAKE 1.10.3 (game filter).txt	ef2f866a9cad6bcac8a66cd2fd21135f6857aedc	15579	legacy-engine	-	-	-
+winws1	general SIMPLE FAKE 1.9.9a (game filter).txt	344bf01bb3cd1374a1b3023104ae44241267ee64	15932	legacy-engine	-	-	-
+winws1	general SIMPLE FAKE ALT 1.10.3 (game filter).txt	428c78b6388faf2abd10c81513f7f88b91e37969	17335	legacy-engine	-	-	-
+winws1	general SIMPLE FAKE ALT 1.9.9a (game filter).txt	5ae0b637f4ab9bf453a7dca1b5486b2adcf1ab10	16836	legacy-engine	-	-	-
+winws1	general SIMPLE FAKE ALT2 1.10.3 (game filter).txt	1b14cd233000118affdf9b577d28b981aa00cab7	16212	legacy-engine	-	-	-
+winws1	general SIMPLE FAKE ALT2 1.9.9a (game filter).txt	35a3ea1f472a0c641e3158ae09f841ae1bd2f4b4	15753	legacy-engine	-	-	-
+winws1	general_181.txt	3db6087feac87315b018a40ce2e3ac87f44027be	3432	legacy-engine	-	-	-
+winws1	general_alt11_191.txt	23dc9ac111e5726bb2347f79210f561cd50dddc6	7705	legacy-engine	-	-	-
+winws1	general_alt11_191_allsites.txt	d2c0dc21483207f36883d1d451166c46f074e7a6	1625	legacy-engine	-	-	-
+winws1	general_simplefake_alt2_191.txt	420c528efd879784fd0fa089078d05bec1569bcf	5741	legacy-engine	-	-	-
+winws1	general_simplefake_alt2_191_allsites.txt	99eae31c9d1ae5705ddda90b8241b6d943cea0b8	1580	legacy-engine	-	-	-
+winws1	md5sigpadencap.txt	697bdb440d5130a6c17ac2a55cd2f3e14c3b2d32	4389	legacy-engine	-	-	-
+winws1	md5sigpadencapwssize.txt	d7b2ff977f602e451aa489d47a2e5013a86451b1	925	legacy-engine	-	-	-
+winws1	mgts1.txt	d38965021b01a4c0ce5b6d10a37fdd37bbfb180e	3439	legacy-engine	-	-	-
+winws1	mgts2.txt	af89e1b585ce86a0d998674fec258370d4420838	3462	legacy-engine	-	-	-
+winws1	mgts2_181.txt	9b1c9e34f7bcda411005bdc7c7e4a82a40f666cc	3138	legacy-engine	-	-	-
+winws1	mgts3.txt	3e43e368bc415607ed7b96b6dc96d966dc8e4dc6	3602	legacy-engine	-	-	-
+winws1	mgts4.txt	847efe108ded75241eec3f1c4242e0974791c3a1	4141	legacy-engine	-	-	-
+winws1	mgts_181.txt	04c79999df938612f375951ae4ed1c88fc6722b5	3366	legacy-engine	-	-	-
+winws1	multisplitmd5sigpadencap.txt	808f134ac8d97e785938ab7dc90fb1113949f3f7	4443	legacy-engine	-	-	-
+winws1	multisplitmd5sigpadencapwssize.txt	f56712a335775f44cb909556e2b67a0d1a6bf7b6	979	legacy-engine	-	-	-
+winws1	original_bolvan.txt	1d8b0ae0b77bf01811d92809d26541694ea678fb	1598	legacy-engine	-	-	-
+winws1	original_bolvan_v2.txt	9a638cf3a6de9ef2c2c64d6af3c988f19ed40d73	1632	legacy-engine	-	-	-
+winws1	original_bolvan_v2_badsum.txt	cccdb734ad037b50cc8571fe43ffa0333b2eadc6	4533	legacy-engine	-	-	-
+winws1	original_bolvan_v2_badsum_1.txt	c453e58d67a8449a0f52434140b18f53507232b2	3860	legacy-engine	-	-	-
+winws1	original_bolvan_v2_badsum_2.txt	9820dae130f6781c539af0fbffc37d348a6794ea	3536	legacy-engine	-	-	-
+winws1	original_bolvan_v2_badsum_3.txt	37b159e51e1a6659df8c09a13379ee5ed6dac5e7	1809	legacy-engine	-	-	-
+winws1	original_bolvan_v2_badsum_6.txt	353939b58d5810878a271f8ec44ca839255cfe5b	664	legacy-engine	-	-	-
+winws1	original_bolvan_v2_badsum_lite.txt	cf53e6fb215e596563d003bdefc2b0996be5c221	1844	legacy-engine	-	-	-
+winws1	original_bolvan_v2_badsum_test.txt	fbbb7579fa55984d291b5ce4ef3859dfdceec81c	1175	legacy-engine	-	-	-
+winws1	other1.txt	732be7557a24957f80830746b7f3e98260dbbf1d	3721	legacy-engine	-	-	-
+winws1	other2.txt	b4c15a7c95bd282d4cacf4787bfc5384b6e9b4b6	3734	legacy-engine	-	-	-
+winws1	rosmega.txt	20fe70f5cd83612ea98efcb0085c9cd192e30ee3	1658	legacy-engine	-	-	-
+winws1	rosmts.txt	c49d7765eeeecd63e311a1898a2e95b14855f69e	1142	legacy-engine	-	-	-
+winws1	split_pos.txt	5fd150796968ddc8b91563af4040a2a9ba937c1b	1566	legacy-engine	-	-	-
+winws1	splitbadseq.txt	6decbc9dbbce1056fa01aa580e971274e149089d	3816	legacy-engine	-	-	-
+winws1	splitsniext.txt	1016132891b2b2d366fbd64a9f92613df8d39f36	3800	legacy-engine	-	-	-
+winws1	ttlpadencap.txt	1d5735d3f81ca7f653d1fcfeb2ba1cfc715cbdbe	3561	legacy-engine	-	-	-
+winws1	ulta2.txt	590d00f62c3effa72e52c3a9d319028c5bd7c029	4125	legacy-engine	-	-	-
+winws1	ultazl.txt	44a52592cf0282736bc594a938bd72794b885101	4034	legacy-engine	-	-	-
+winws1	ultimatealt.txt	431cfbbbe83968dc5afbd989af4c017083b711f0	1612	legacy-engine	-	-	-
+winws1	valorant.txt	041dd908ba93f4ee45650a6f13bcf5f9ef657c91	740	legacy-engine	-	-	-
+winws1	warp1.txt	a7bdefc8bfcf3769a8fb97a8f866ad84598d4074	1179	legacy-engine	-	-	-
+winws2	ALL TCP & UDP YTDisBystro_3_4_v1.txt	fb58c8c50152b11e1f7b5abcce44e5d0354f2d93	4746	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	ALL TCP & UDP discord_urgent_sni.txt	53bef8c1d6015c14174ec518d787a3efce063a50	4679	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	ALL TCP & UDP fake_tls_auto_11.txt	3fccdb519c6bb520cbaba69319202a961667b0a7	4869	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	ALL TCP & UDP hostfakesplit.txt	4cdebb644a441bec33a45fa6e3568193c3a17e89	4689	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	ALL TCP & UDP hostfakesplit_multi_syndata.txt	52e72bd589ea7c01ecc7b6c16f676dd3ca80ae12	4792	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	ALL TCP & UDP multidisorder complex.txt	55895fe7364c13c69c86c7ffedeb497733dc6174	4721	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	ALL TCP & UDP multisplit_sni.txt	b79a006a907a03245b44fd3e39f1d001f56b5ab1	4759	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	ALL TCP & UDP multisplit_stun.txt	c7916c183478a6700ae4be2778f1525fdcf73b38	4756	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	ALL TCP & UDP v1.txt	d0f382e0b9fe2d13d51886507a044676f0ff4036	2272	windows-package-dependencies	34,35,48,63,65,76,77,92	28,48,60	1,2,3,4,5,6,7,8
+winws2	ALL TCP & UDP v2.txt	ba53c062d6b0f0a13c04e74af1b77bb91e3c4ae2	3549	windows-package-dependencies	11,12,13,27,34,35,48,63,65,76,77,92	28,52,54,60	1,2,3,4,5,6,7,8
+winws2	ALL TCP & UDP v3_1.txt	db2754f68e1c5a6bf452f9a96901826b207d1b2d	4651	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	ALL TCP & UDP v3_2.txt	b1dfc899c2e250922e1e9f716b96e6376b704651	4720	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Dead by Daylight (game filter).txt	973e9322a210a90b0304cc7bca3791a6c0103b39	13936	windows-package-dependencies	1,5,6,7,8,11,12,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,53,55,56,58,59,60,63,65,67,68,71,72,74,75,76,77,78,82,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Dead by Daylight v2 (game filter).txt	0db39aa121c859b7c23046124a443eff3255bfd8	15982	windows-package-dependencies	1,5,6,7,8,11,12,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,51,52,53,55,56,58,59,60,63,65,67,71,72,74,75,76,77,78,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default (circular) v2.txt	2f382f2c4a6c4764a60b57acd6dc9c21aa9ee23e	7400	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default (circular).txt	88d39633616098b56f8d8c2ed8e67ed1ee951c60	8556	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default (game filter).txt	14a04b07957f09103a5888d0858d583776c4da9e	10953	windows-package-dependencies	7,8,11,12,13,15,20,22,24,34,35,48,52,55,58,59,60,63,65,67,68,69,71,72,74,75,76,77,78,79,81,82,85,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default multisplit_sni (game filter).txt	05d7e72709f63748b999e0588d358d40e0e542aa	13147	windows-package-dependencies	1,5,6,7,8,11,12,13,14,20,22,26,27,29,30,33,34,35,41,42,44,47,48,51,52,55,56,58,59,63,65,67,71,72,76,77,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default multisplit_sni.txt	b96ad22cc72fc2c620bc84a983a0275ae88577d7	8254	windows-package-dependencies	11,12,13,15,20,22,24,26,34,35,48,53,58,60,63,65,67,68,71,72,74,75,76,77,78,82,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default multisplit_stun (game filter).txt	d9878e5097b6357d7013bac15a6b388192427884	13101	windows-package-dependencies	1,5,6,7,8,11,12,13,14,20,22,26,27,29,30,33,34,35,41,42,44,47,48,51,52,55,56,58,59,63,65,67,71,72,76,77,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default multisplit_stun.txt	741afb2faab81ccd47ee3aebd2410f36fba0a64b	8125	windows-package-dependencies	11,12,13,15,20,22,24,26,34,35,48,53,58,60,63,65,67,68,71,72,74,75,76,77,78,82,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default v1 (game filter).txt	42d6a017d8afdd14de967bef2177d7199dc59109	18788	windows-package-dependencies	3,5,6,10,11,12,13,14,16,18,19,20,22,25,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,46,48,51,52,54,55,57,58,59,60,63,64,65,67,68,69,71,74,76,77,78,79,80,81,82,84,85,86,87,88,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default v2 (game filter).txt	4abff00bab81c0c89e8fad5a9adc80109836622e	14323	windows-package-dependencies	1,5,6,7,8,11,12,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,53,55,56,58,59,60,63,65,67,68,71,72,74,75,76,77,78,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default v3 (game filter).txt	008662114d99a9b5f7b6160f49bf86700d47cca3	11077	windows-package-dependencies	1,7,8,11,12,13,14,20,21,22,26,27,29,30,33,34,35,41,42,44,47,48,49,56,58,59,60,63,65,67,68,72,76,77,82,83,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default v4 (game filter).txt	b3a06255b3b9ef75f17824155a7aa19ffa659f6b	13965	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,20,22,26,27,29,30,33,34,35,41,42,44,47,48,51,52,55,56,58,59,63,65,67,68,71,72,76,77,88,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Default v5 (game filter).txt	3efca004529e4c653e9ac9ef0dcdd91e2c9efa8a	12175	windows-package-dependencies	1,5,6,7,8,11,12,14,20,22,26,27,29,30,33,34,35,41,42,44,47,48,50,52,55,56,58,59,63,65,75,76,77,83,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Gaming (game filter).txt	e43359b983eaec1ad75486ef0e150893c6f0a62e	13502	windows-package-dependencies	1,5,7,8,11,12,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,51,52,53,55,56,58,59,60,63,65,67,68,71,72,74,75,76,77,78,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Preset X (game filter).txt	36ffd453609c8448a52b27adaa740e1a16c64e02	12274	windows-package-dependencies	1,5,6,7,8,11,13,14,20,22,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,63,65,71,72,76,77,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Preset X v2 (game filter).txt	0b8131c091c4e4519ec9ed5406a08378fb433dee	8815	windows-package-dependencies	1,5,6,11,13,14,20,22,26,29,30,33,34,35,45,47,48,49,55,63,65,71,72,76,77,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Preset X v3 (game filter).txt	303d2ac758b01eece0a3321e7374f20788f0aed5	9163	windows-package-dependencies	1,11,12,13,14,20,22,26,27,33,34,35,45,47,48,49,55,63,65,71,72,76,77,86,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Preset XY (game filter).txt	82ab55a2ceab1b4789d48a63b64efc9a00af1a31	8251	windows-package-dependencies	1,5,6,11,13,14,20,22,26,29,30,33,34,35,48,49,55,63,65,72,76,77,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Preset.X1.txt	cb365aaf986458a839c47476d6fb7db347140425	9674	windows-package-dependencies	1,5,11,12,13,14,20,22,26,27,29,30,33,34,35,45,47,48,55,63,65,69,71,72,73,76,77,86,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,58,59,60	1,2,3,4,5,6,7,8
+winws2	Send + Syndata (game filter).txt	283ae528793e2beb2216ea4231be6b4c816f1145	12881	windows-package-dependencies	1,5,6,7,8,11,12,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,53,55,56,58,59,60,63,65,67,71,72,74,75,76,77,78,82,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Syndata + MultiDisorder legacy (game filter).txt	3591f42a5447eb3f4be2a40d55d65e811541bd3a	13176	windows-package-dependencies	1,5,6,7,8,11,12,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,53,55,56,58,59,60,63,65,67,71,72,74,75,76,77,78,82,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Syndata + MultiDisorder legacy WoW (game filter).txt	4afac26d4c78da03e696e8e4a07fd0c9ece6712d	10555	windows-package-dependencies	1,7,8,11,12,13,14,20,21,22,26,27,33,34,35,48,49,53,55,58,63,65,67,72,76,77,82,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	TESTERSKIY BY SSB.txt	e83652677adef0c670005746707b0a5b4fc36b33	8177	windows-package-dependencies	11,12,13,15,20,22,24,34,35,48,53,58,60,63,65,68,69,71,72,74,75,76,77,78,82,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Ultimate Main Riot + Valorant (game filter).txt	a442209d95c96160b6551d49b600c5cab781c274	7826	windows-package-dependencies	1,7,8,11,12,13,14,20,22,26,33,34,35,41,42,44,47,48,52,55,56,58,59,63,65,70,72,76,77,91,92	28,48,54,60	1,2,3,4,5,6,7,8
+winws2	Universal V5.txt	9d4f24ada0f14f7db1611af0625735b27b60726b	13197	windows-package-dependencies	1,2,3,4,7,8,9,11,12,13,14,15,17,18,19,20,21,22,24,27,33,34,35,48,49,51,53,58,61,63,65,66,69,70,72,74,75,76,77,86,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,58,59,60	1,2,3,4,5,6,7,8
+winws2	complex multidisorder (game filter).txt	7d330469a6cd32edcd61149bb72592820fbee522	15581	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	custom (circular).txt	bf48ffe83b6dbd4d645b98f44d661d72dba98202	6835	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	fake (circular).txt	08749c25d5b0fcc4c8b16e3f44eae73a602104c0	8570	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	fake close.txt	8e22eff6d221f441e4600ba730bbcbd734f47795	2603	windows-package-dependencies	34,35,48,63,65,76,77,92	28	1,2,3,4,5,6,7,8
+winws2	general 1.10.3 (game filter).txt	1da8e6a0522a7280f42ace4cbfd4ba36a2ad728b	26252	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,45,60	1,2,3,4,5,6,7,8
+winws2	general 1.9.9 (game filter).txt	b40b72d7d01df2dbe36d1760dae48ce090f67c74	14661	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,45,60	1,2,3,4,5,6,7,8
+winws2	general ALT (game filter).txt	27caf955cec245ad8c324e5262580105f95f8777	13758	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,62,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT.txt	b989d40b128533f3f79c8a835546f9b123ff4294	8892	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,62,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT1 1.10.3 (game filter).txt	33896f86c2c28942f64d37e6c9584accf2d3e252	45263	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,30,54,60	1,2,3,4,5,6,7,8
+winws2	general ALT1 1.9.9 (game filter).txt	1e22451f89a5ae6e0082e9186fe05d1ca9c7eeed	22343	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,30,54,60,61	1,2,3,4,5,6,7,8
+winws2	general ALT10 (game filter).txt	ae62c73c22a87efd50ed433aca14069d909b0832	12998	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT10 1.10.3 (game filter).txt	cc0bac8e3bb2d7de4645371eef543507620113b9	37797	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,30,45,54,60	1,2,3,4,5,6,7,8
+winws2	general ALT10 1.9.9 (game filter).txt	0e000c52400b33fac6165bdf158f67d2812bc8e6	19494	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,30,45,54,60,61	1,2,3,4,5,6,7,8
+winws2	general ALT10.txt	11d00a2d4682ef378fa4f9d31a62dca8a86ccce6	7409	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT11 (game filter).txt	ed0438f050b361af8f454d2be3f6e179422bebb4	14270	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT11 1.10.3 (game filter).txt	f4381623d8c58b386205276634dba5abdd0e1ee6	43962	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,31,54,60	1,2,3,4,5,6,7,8
+winws2	general ALT11 1.9.9 (game filter).txt	9faa27caa90b25dfe8ca9a0a9a68234224103a2a	20646	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,30,54,60,61	1,2,3,4,5,6,7,8
+winws2	general ALT11.txt	55a53b409b69603d7f4a0dc872af09a0010dd3cb	9077	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT12 1.10.3 (game filter).txt	6374ae5e9f61e23bcbd23fe0b54bc3f90e582a5a	43540	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,30,54,60	1,2,3,4,5,6,7,8
+winws2	general ALT12 1.9.9 (game filter).txt	e407195483eb083af32db4b09f9338e5934ee3cb	20175	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,30,54,60,61	1,2,3,4,5,6,7,8
+winws2	general ALT13 1.10.3 (game filter).txt	ef42d4c454b32b35710fdafdc39a9003f2e45cb8	44895	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,31,57,60	1,2,3,4,5,6,7,8
+winws2	general ALT2 (game filter).txt	a41dc877b272e57f5a2d6c4b06e0b928e4298ace	12144	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,62,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT2 + syndata.txt	989efb697e983ec856d25b80a6209a76f13a9ef1	8930	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,62,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT2 1.10.3 (game filter).txt	319bf860d131c3e628eff6c4ba016cd56d56d96a	26329	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,60	1,2,3,4,5,6,7,8
+winws2	general ALT2 1.9.9 (game filter).txt	224395f8f05094aca9ffe83874fe0ea5ddeceb7d	14699	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,60	1,2,3,4,5,6,7,8
+winws2	general ALT2.txt	9b78ba4f41fad4387ddadf77ce93ffff42f82d67	7679	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,62,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT3 (game filter).txt	52fa3c1fd44d60612a76550144458be143bbcb08	14406	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,62,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT3 1.10.3 (game filter).txt	6863ef5a8f8b56131d9e28345a33ef7547dbd5e3	41061	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,54,60	1,2,3,4,5,6,7,8
+winws2	general ALT3 1.9.9 (game filter).txt	3e0b80305d56ec9728d58b4869bd45afd934d9bc	20733	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,54,60	1,2,3,4,5,6,7,8
+winws2	general ALT3.txt	f68fdab62e2bf2be7728d2ceb02ad4f877cc8ed6	9921	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,62,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT4 (game filter).txt	4e37f022633f7014f5d5493b4cf92e1a2665d5fb	12824	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,62,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT4 1.10.3 (game filter).txt	b8a7fe8fa9c540fcc1fd814ee27444ff506b9c0a	44840	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,30,54,60	1,2,3,4,5,6,7,8
+winws2	general ALT4 1.9.9 (game filter).txt	bb3750f9d5d94e2639d77118bdf8508b4d783bd9	21344	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,30,54,60,61	1,2,3,4,5,6,7,8
+winws2	general ALT4.txt	e27200c727eeafa8b9daf7b15b2ffdc8c5eefc8f	8244	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,62,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT5 (game filter).txt	9148fdf34c05cc1a659c0245fc54dfe7b7115e0f	9445	windows-package-dependencies	1,5,6,7,8,14,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT5 1.10.3 (game filter).txt	ceca5eb270e05d2824632634daed91cae15ba066	27172	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,60	1,2,3,4,5,6,7,8
+winws2	general ALT5.txt	8775a4d128c324613dab07879425a2861b7af8f3	4965	windows-package-dependencies	26,34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT6 (game filter).txt	44f0123ade5fd14f0cfbf3a5587056a30250907c	11974	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT6 1.10.3 (game filter).txt	47f6c4565806bc73188d56adc085b29928b20aad	26329	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,60	1,2,3,4,5,6,7,8
+winws2	general ALT6 1.9.9 (game filter).txt	da5988f6ed47ecdb72ab1148439762eab4e97da7	14699	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,60	1,2,3,4,5,6,7,8
+winws2	general ALT6.txt	3a6661e84d9034cdf492caa6253ee5a512a59616	7521	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT7 (game filter).txt	637ddef4eef093e6893e45a76a3678268859e526	11311	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT7 1.10.3 (game filter).txt	36f891ba058c9d2dbbaf1d217b312450f8ae4732	25052	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,60	1,2,3,4,5,6,7,8
+winws2	general ALT7 1.9.9 (game filter).txt	3d22b96cff4e804ca919fdd7c2463da21fe91ab0	13984	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,60	1,2,3,4,5,6,7,8
+winws2	general ALT7.txt	a8bb869468732f643be03f9fb0e822461a72518a	7655	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT8 (game filter).txt	40c05c76684d9466e28341da58079aa9fe7184d9	11667	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT8 1.10.3 (game filter).txt	0c7b4db26487563f13b33922811809c7fcb631ca	34576	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,54,60	1,2,3,4,5,6,7,8
+winws2	general ALT8 1.9.9 (game filter).txt	0f365fae07afa3087eb7d8203a4f84ec0b8b0e68	17358	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,54,60,61	1,2,3,4,5,6,7,8
+winws2	general ALT8.txt	05b2eb7a83786c8ee1d9f684fbe23beba8d8c293	7338	windows-package-dependencies	11,13,15,20,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT9 1.10.3 (game filter).txt	08ab8452517b3fe41b43414cdca756ed9d2a84b6	27217	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,60	1,2,3,4,5,6,7,8
+winws2	general ALT9 1.9.4 (game filter).txt	ebe331bfb74bac40696fac3ccf5e1bfbe6d45534	12006	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT9 1.9.4.txt	90598f545edefcc0d300b0251aed1def8a22ccda	7572	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT9 1.9.5 (game filter).txt	a12f5902b8911d82497171b8f80df261abce9231	12020	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT9 1.9.5.txt	428b82f51da2517404c01bf55abff6ba1b85476b	7587	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general ALT9 1.9.9 (game filter).txt	7c9ce17c799983306e75ce888ae20a30de3db792	14815	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,60	1,2,3,4,5,6,7,8
+winws2	general EXP 1.10.0 (game filter).txt	c183a2fc28e0fd4803ee55a530bb8c05a63fff5c	36991	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,24,28,31,54,60	1,2,3,4,5,6,7,8
+winws2	general EXP 1.10.3 (game filter).txt	3f4c94eb8cb9fa4552c6b8807ab7123054d5b760	36797	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,25,28,31,54,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO (game filter).txt	c21566b71affdcf239e905eb6f3256491bf0794a	16838	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO 1.10.3 (game filter).txt	ef641c017e03e00e15e5a245df418ceb3ce4f614	50093	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,54,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO 1.9.9 (game filter).txt	77d447ae1a5912123177d9164817a0fc5d0fda48	24605	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,54,60,61	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT (game filter).txt	b2b02887ed75574865e4e919959153cb7db0399a	14210	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT 1.10.3 (game filter).txt	b5a703561aaab323198ba24e50e97f6e12584f13	44315	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,54,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT 1.9.9 (game filter).txt	9c341036c7c65ac0cffd5468cef9286de0145f00	21485	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,54,60,61	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT.txt	9163672aef1fc2ec1081bca6cd6c8dcba310b086	8774	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT2 (game filter).txt	a2e72d6148989e60a80e9b6453c31ab83d3fa640	15051	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT2 1.10.3 (game filter).txt	328849a38340811a3f44da409ad4f5890ca4a615	44776	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,54,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT2 1.9.9 (game filter).txt	c24c72551a452cb9bdf68b48380f2ba10ad6f63a	22937	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,54,60,61	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT2.txt	5101d9a76700481e85ffa0ed4b014dce4a47fc99	9255	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT3 (game filter).txt	3aa10968f47a65a3da6e513503dee9fe8b1b2d83	15527	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT3 1.10.3 (game filter).txt	7558f1293c5a5adce50431e6557885c49883ec1a	42379	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,54,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT3 1.9.9 (game filter).txt	e3efe598dfe748c4f28ba1a5e3c940c03f5a913f	22741	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,54,60,61	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO ALT3.txt	445e165bae24d4763f0824858dae10949089a5b3	9527	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO v2 (game filter).txt	fce419ee2ffdfad8630d82c75fea2e9b0b1ff1d3	14825	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO v2.txt	26c0e1f13064db041da2f2c51d600efdea9a2632	9175	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general FAKE TLS AUTO.txt	9e6009189b926e058c7adfd4b0f2d26652d3691a	10324	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE (game filter).txt	c0f3d6914a2a01e1a241ba619464ba19b20c13bd	11931	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE 1.10.3 (game filter).txt	edf47136c7db7b93f9fccb3fe18bf09db7e8d3e2	33406	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,31,54,60	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE 1.9.9 (game filter).txt	e0f0138aecf5f4b9009a8ac8f8e306017ea84beb	19199	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,30,54,60,61	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE ALT (game filter).txt	7404b030c9c32cd9f1e2bb881783f96f5419d1ad	11575	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE ALT 1.10.3 (game filter).txt	7644eff5bff4f46821bce3eae92d82ffc5a8578d	39804	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,31,54,60	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE ALT 1.9.9 (game filter).txt	7405844621d911c668227f1af6e7f9564b53aac7	18548	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,30,54,60,61	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE ALT.txt	c4eb00bfd5b9003c13828d738de1859c384bd298	7267	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE ALT2 (game filter).txt	48910b4547bf1de9a0651eff002ad69839961259	13016	windows-package-dependencies	1,5,6,7,8,11,13,14,15,20,22,24,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,59,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE ALT2 1.10.3 (game filter).txt	ad237ceb186c6a513512d3d42f97765f60c76a21	37486	windows-package-dependencies	1,3,7,8,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,50,51,52,54,55,56,57,58,59,60,62,63,64,65,68,69,70,71,72,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90,92	1,2,28,31,54,60	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE ALT2 1.9.9 (game filter).txt	b948d49ffb2ac09f90ff9d34431213265fad7e5b	19134	windows-package-dependencies	1,5,6,7,8,9,11,12,13,14,15,18,19,20,21,22,24,26,27,28,29,30,33,34,35,41,42,44,45,47,48,50,51,52,53,55,56,58,59,60,63,65,68,69,70,71,72,74,75,76,77,78,79,81,82,85,86,88,90,91,92	26,28,30,54,60,61	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE ALT2.txt	21345addacf2f292e31c4f62b5794cccc4df2807	8813	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	general SIMPLE FAKE.txt	65c9ce8137b42809a5e9e8060cbb5dfe0f4cad25	7366	windows-package-dependencies	11,13,15,20,22,24,26,34,35,48,60,63,65,71,74,75,76,77,78,87,90,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	multidisorder (circular).txt	f47696fd8900951f41b81865fbbca639044ddfaa	7357	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	multisplit (circular).txt	7d8d941ee3e72069ac7b2bd73c8bdff6fe8720d1	8376	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	protocol mask (stun).txt	911e533ee703beb46c7f32e70fd0de661d83694a	2608	windows-package-dependencies	34,35,48,63,65,76,77,92	28,30	1,2,3,4,5,6,7,8
+winws2	shadow probes (circular).txt	d8b84254d8a462d1e804c63c71b3daa337eebae6	8608	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	slow disorder.txt	7133a9deb4ca3aa0cfa488d1a55353487045a42b	2601	windows-package-dependencies	34,35,48,63,65,76,77,92	28	1,2,3,4,5,6,7,8
+winws2	slow split.txt	723046c00492d25a100c0e4db2aed9971853a6e2	2582	windows-package-dependencies	34,35,48,63,65,76,77,92	28	1,2,3,4,5,6,7,8
+winws2	special for loop-uh.txt	738171c5fecd724d86a76108332b7b61c89a8349	5561	windows-package-dependencies	20,34,35,48,51,58,63,65,76,77,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	syndata (circular).txt	5daf7493e2619c7438b3e9108560d9a47be2eb49	9186	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	tls records.txt	9b6abc5e8288390033729f17b41a29662e53dc33	2564	windows-package-dependencies	34,35,48,63,65,76,77,92	28	1,2,3,4,5,6,7,8
+winws2	white sni (circular).txt	18fa9841da292f0bfe51509a70862bb6aeb1100f	10481	windows-package-dependencies	34,35,48,63,65,76,77,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+winws2	Ростелеком.txt	8026fe254509b0c43e9f1365346a33d6acc07860	12095	windows-package-dependencies	1,5,6,7,8,14,20,22,26,27,29,30,33,34,35,41,42,44,47,48,52,55,56,58,59,63,65,72,76,77,91,92	3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,59,60	1,2,3,4,5,6,7,8
+# lists index
+# 1	lists/amazon.txt	not-in-public-tag
+# 2	lists/apple.txt	not-in-public-tag
+# 3	lists/chatgpt.txt	not-in-public-tag
+# 4	lists/claude.txt	not-in-public-tag
+# 5	lists/cloudflare-ipset.txt	not-in-public-tag
+# 6	lists/cloudflare-ipset_v6.txt	not-in-public-tag
+# 7	lists/cloudflare.txt	not-in-public-tag
+# 8	lists/cloudfront.txt	not-in-public-tag
+# 9	lists/deepseek.txt	not-in-public-tag
+# 10	lists/discord-images.txt	not-in-public-tag
+# 11	lists/discord-media.txt	not-in-public-tag
+# 12	lists/discord-updates.txt	not-in-public-tag
+# 13	lists/discord.txt	not-in-public-tag
+# 14	lists/epicgames-fortnite.txt	not-in-public-tag
+# 15	lists/facebook.txt	not-in-public-tag
+# 16	lists/fandom.txt	not-in-public-tag
+# 17	lists/gemini.txt	not-in-public-tag
+# 18	lists/github.txt	not-in-public-tag
+# 19	lists/githubusercontent.txt	not-in-public-tag
+# 20	lists/google-backend.txt	not-in-public-tag
+# 21	lists/google.txt	not-in-public-tag
+# 22	lists/googlevideo.txt	not-in-public-tag
+# 23	lists/i-ytimg.txt	not-in-public-tag
+# 24	lists/instagram.txt	not-in-public-tag
+# 25	lists/ipset-akamai.txt	not-in-public-tag
+# 26	lists/ipset-all.txt	not-in-public-tag
+# 27	lists/ipset-amazon.txt	not-in-public-tag
+# 28	lists/ipset-anydesk.txt	not-in-public-tag
+# 29	lists/ipset-cloudflare.txt	not-in-public-tag
+# 30	lists/ipset-cloudflare1.txt	not-in-public-tag
+# 31	lists/ipset-datacamp.txt	not-in-public-tag
+# 32	lists/ipset-digitalocean.txt	not-in-public-tag
+# 33	lists/ipset-discord.txt	not-in-public-tag
+# 34	lists/ipset-dns.txt	not-in-public-tag
+# 35	lists/ipset-exclude.txt	not-in-public-tag
+# 36	lists/ipset-facebook.txt	not-in-public-tag
+# 37	lists/ipset-fastly.txt	not-in-public-tag
+# 38	lists/ipset-frantech.txt	not-in-public-tag
+# 39	lists/ipset-google.txt	not-in-public-tag
+# 40	lists/ipset-hetzner.txt	not-in-public-tag
+# 41	lists/ipset-lol-euw.txt	not-in-public-tag
+# 42	lists/ipset-lol-ru.txt	not-in-public-tag
+# 43	lists/ipset-novoserve.txt	not-in-public-tag
+# 44	lists/ipset-ovh.txt	not-in-public-tag
+# 45	lists/ipset-porn.txt	not-in-public-tag
+# 46	lists/ipset-railway.txt	not-in-public-tag
+# 47	lists/ipset-roblox.txt	not-in-public-tag
+# 48	lists/ipset-ru.txt	not-in-public-tag
+# 49	lists/ipset-russia-youtube-rtmps.txt	not-in-public-tag
+# 50	lists/ipset-tankix.txt	not-in-public-tag
+# 51	lists/ipset-telegram.txt	not-in-public-tag
+# 52	lists/ipset-timeweb.txt	not-in-public-tag
+# 53	lists/ipset-twitter.txt	not-in-public-tag
+# 54	lists/ipset-usa-google.txt	not-in-public-tag
+# 55	lists/ipset-warp.txt	not-in-public-tag
+# 56	lists/ipset-whatsapp.txt	not-in-public-tag
+# 57	lists/ipset-worldstream.txt	not-in-public-tag
+# 58	lists/ipset-youtube.txt	not-in-public-tag
+# 59	lists/ipset-zapretkvn.txt	not-in-public-tag
+# 60	lists/itch.txt	not-in-public-tag
+# 61	lists/linkedin.txt	not-in-public-tag
+# 62	lists/list-general.txt	not-in-public-tag
+# 63	lists/matrix.txt	not-in-public-tag
+# 64	lists/microsoft-store.txt	not-in-public-tag
+# 65	lists/netrogat.txt	not-in-public-tag
+# 66	lists/notion.txt	not-in-public-tag
+# 67	lists/ntcparty.txt	not-in-public-tag
+# 68	lists/obsidian.txt	not-in-public-tag
+# 69	lists/other.txt	not-in-public-tag
+# 70	lists/riot-valorant.txt	not-in-public-tag
+# 71	lists/roblox.txt	not-in-public-tag
+# 72	lists/russia-blacklist.txt	not-in-public-tag
+# 73	lists/russia-youtube-rtmps.txt	not-in-public-tag
+# 74	lists/rutor.txt	not-in-public-tag
+# 75	lists/rutracker.txt	not-in-public-tag
+# 76	lists/signal.txt	not-in-public-tag
+# 77	lists/simplex.txt	not-in-public-tag
+# 78	lists/soundcloud.txt	not-in-public-tag
+# 79	lists/speedtest.txt	not-in-public-tag
+# 80	lists/static-whatsapp-net.txt	not-in-public-tag
+# 81	lists/steam.txt	not-in-public-tag
+# 82	lists/tankix.txt	not-in-public-tag
+# 83	lists/telegram.txt	not-in-public-tag
+# 84	lists/tiktok.txt	not-in-public-tag
+# 85	lists/twimg.txt	not-in-public-tag
+# 86	lists/twitch.txt	not-in-public-tag
+# 87	lists/twitter.txt	not-in-public-tag
+# 88	lists/ubisoft.txt	not-in-public-tag
+# 89	lists/vencord.txt	not-in-public-tag
+# 90	lists/whatsapp.txt	not-in-public-tag
+# 91	lists/youtube.txt	not-in-public-tag
+# 92	lists/zapret-moe.txt	not-in-public-tag
+# blobs index
+# 1	bin/ACTIVE_DISCORD_UDP.bin	not-in-public-tag
+# 2	bin/ACTIVE_GAME_UDP.bin	not-in-public-tag
+# 3	bin/dtls_clienthello_w3_org.bin	not-in-public-tag
+# 4	bin/fake_quic.bin	not-in-public-tag
+# 5	bin/fake_quic_1.bin	not-in-public-tag
+# 6	bin/fake_quic_2.bin	not-in-public-tag
+# 7	bin/fake_quic_3.bin	not-in-public-tag
+# 8	bin/fake_tls_1.bin	not-in-public-tag
+# 9	bin/fake_tls_2.bin	not-in-public-tag
+# 10	bin/fake_tls_3.bin	not-in-public-tag
+# 11	bin/fake_tls_4.bin	not-in-public-tag
+# 12	bin/fake_tls_5.bin	not-in-public-tag
+# 13	bin/fake_tls_6.bin	not-in-public-tag
+# 14	bin/fake_tls_7.bin	not-in-public-tag
+# 15	bin/fake_tls_8.bin	not-in-public-tag
+# 16	bin/http_iana_org.bin	not-in-public-tag
+# 17	bin/quic_1.bin	not-in-public-tag
+# 18	bin/quic_2.bin	not-in-public-tag
+# 19	bin/quic_3.bin	not-in-public-tag
+# 20	bin/quic_4.bin	not-in-public-tag
+# 21	bin/quic_5.bin	not-in-public-tag
+# 22	bin/quic_6.bin	not-in-public-tag
+# 23	bin/quic_7.bin	not-in-public-tag
+# 24	bin/quic_initial_4pda.to.bin	not-in-public-tag
+# 25	bin/quic_initial_4pda_to.bin	not-in-public-tag
+# 26	bin/quic_initial_dbankcloud_ru.bin	not-in-public-tag
+# 27	bin/quic_initial_vk_com.bin	not-in-public-tag
+# 28	bin/quic_initial_www_google_com.bin	not-in-public-tag
+# 29	bin/quic_test_00.bin	not-in-public-tag
+# 30	bin/stun.bin	not-in-public-tag
+# 31	bin/stun2.bin	not-in-public-tag
+# 32	bin/syn_packet.bin	not-in-public-tag
+# 33	bin/tls_clienthello_1.bin	not-in-public-tag
+# 34	bin/tls_clienthello_10.bin	not-in-public-tag
+# 35	bin/tls_clienthello_11.bin	not-in-public-tag
+# 36	bin/tls_clienthello_12.bin	not-in-public-tag
+# 37	bin/tls_clienthello_13.bin	not-in-public-tag
+# 38	bin/tls_clienthello_14.bin	not-in-public-tag
+# 39	bin/tls_clienthello_17.bin	not-in-public-tag
+# 40	bin/tls_clienthello_18.bin	not-in-public-tag
+# 41	bin/tls_clienthello_2.bin	not-in-public-tag
+# 42	bin/tls_clienthello_2n.bin	not-in-public-tag
+# 43	bin/tls_clienthello_3.bin	not-in-public-tag
+# 44	bin/tls_clienthello_4.bin	not-in-public-tag
+# 45	bin/tls_clienthello_4pda_to.bin	not-in-public-tag
+# 46	bin/tls_clienthello_5.bin	not-in-public-tag
+# 47	bin/tls_clienthello_6.bin	not-in-public-tag
+# 48	bin/tls_clienthello_7.bin	not-in-public-tag
+# 49	bin/tls_clienthello_8.bin	not-in-public-tag
+# 50	bin/tls_clienthello_9.bin	not-in-public-tag
+# 51	bin/tls_clienthello_chat_deepseek_com.bin	not-in-public-tag
+# 52	bin/tls_clienthello_gosuslugi_ru.bin	not-in-public-tag
+# 53	bin/tls_clienthello_iana_org.bin	not-in-public-tag
+# 54	bin/tls_clienthello_max_ru.bin	not-in-public-tag
+# 55	bin/tls_clienthello_sberbank_ru.bin	not-in-public-tag
+# 56	bin/tls_clienthello_sberbank_ru_v2.bin	not-in-public-tag
+# 57	bin/tls_clienthello_sochi_park.bin	not-in-public-tag
+# 58	bin/tls_clienthello_vk_com.bin	not-in-public-tag
+# 59	bin/tls_clienthello_vk_com_kyber.bin	not-in-public-tag
+# 60	bin/tls_clienthello_www_google_com.bin	not-in-public-tag
+# 61	bin/zero_256.bin	not-in-public-tag
+# lua index
+# 1	lua/custom_diag.lua	not-in-public-tag
+# 2	lua/custom_funcs.lua	not-in-public-tag
+# 3	lua/fakemultidisorder.lua	not-in-public-tag
+# 4	lua/fakemultisplit.lua	not-in-public-tag
+# 5	lua/zapret-antidpi.lua	pinned-engine-equivalent-name-only
+# 6	lua/zapret-auto.lua	pinned-engine-equivalent-name-only
+# 7	lua/zapret-lib.lua	pinned-engine-equivalent-name-only
+# 8	lua/zapret-multishake.lua	not-in-public-tag

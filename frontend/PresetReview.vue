@@ -23,6 +23,7 @@
           <v-alert :type="result.record ? 'success' : 'warning'" variant="tonal" class="mb-3">
             {{ t(result.record ? 'zapretCatalog.reviewValid' : 'zapretCatalog.reviewBlocked') }}
           </v-alert>
+          <PresetOriginDetails v-if="result.origin" :origin="result.origin" />
           <ul v-if="result.issues?.length" class="ps-5 mb-3">
             <li v-for="(issue, i) in result.issues" :key="i" class="text-break mb-1">
               <strong v-if="issue.span">{{ t('zapretCatalog.sourceLocation', issue.span) }}: </strong>
@@ -69,6 +70,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import PresetOriginDetails from './PresetOriginDetails.vue'
 import { catalogError, encodePresetBytes, nativeReviewBytes, presetBytes, reviewPreset, savePreset, type CatalogView, type PresetInput, type PresetPreview, type PresetTemplate } from './catalog'
 
 const props = defineProps<{ revision: string; template?: PresetTemplate; templateLabel?: string }>()

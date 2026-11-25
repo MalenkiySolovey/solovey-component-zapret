@@ -40,6 +40,7 @@ type PresetProfile struct {
 
 type PresetPreview struct {
 	Source       string             `json:"source,omitempty"`
+	Origin       *PresetOrigin      `json:"origin,omitempty"`
 	Profiles     []PresetProfile    `json:"profiles,omitempty"`
 	Issues       []PresetIssue      `json:"issues,omitempty"`
 	Dependencies []PresetDependency `json:"dependencies,omitempty"`
@@ -85,6 +86,9 @@ func (c Catalog) PreparePreset(id string, input PresetInput) (Catalog, PresetPre
 		files, err := readPresetPackage(input.Content)
 		if err != nil {
 			return Catalog{}, PresetPreview{}, err
+		}
+		if _, ok := files["manifest.json"]; ok {
+			return c.prepareGUIPreset(id, input.Name, input.Content, files)
 		}
 		if encoded, ok := files["strategy.json"]; ok && len(files) == 1 {
 			return c.prepareTransferPreset(id, input.Name, encoded)
@@ -154,6 +158,11 @@ func finishPreset(c Catalog, p PresetPreview, draft Draft, lists map[string]Name
 	if len(p.Issues) != 0 {
 		return Catalog{}, p, nil
 	}
+	if draft.origin == nil {
+		draft.origin = p.Origin
+	} else {
+		p.Origin = draft.origin
+	}
 	next, err := c.withImportedDraft(draft, lists, blobs)
 	if err != nil {
 		var option *nativeOptionError
@@ -176,20 +185,28 @@ func finishPreset(c Catalog, p PresetPreview, draft Draft, lists map[string]Name
 func decodePresetTransfer(data []byte) (Transfer, error) {
 	var t Transfer
 	invalid := errors.New("invalid Solovey strategy JSON: expected one transfer with no duplicate or unknown fields")
-	if !utf8.Valid(data) || !json.Valid(data) {
+	if err := decodePresetJSON(data, &t); err != nil {
 		return t, invalid
+	}
+	return t, nil
+}
+
+func decodePresetJSON(data []byte, target any) error {
+	invalid := errors.New("expected a single JSON object with no duplicate or unknown fields")
+	if !utf8.Valid(data) || !json.Valid(data) {
+		return invalid
 	}
 	shape := json.NewDecoder(bytes.NewReader(data))
 	shape.UseNumber()
 	if !uniquePresetJSON(shape, 0) || shape.More() {
-		return t, invalid
+		return invalid
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&t); err != nil || decoder.Decode(new(any)) != io.EOF {
-		return t, invalid
+	if err := decoder.Decode(target); err != nil || decoder.Decode(new(any)) != io.EOF {
+		return invalid
 	}
-	return t, nil
+	return nil
 }
 
 func uniquePresetJSON(decoder *json.Decoder, depth int) bool {
