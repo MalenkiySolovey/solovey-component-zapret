@@ -16,6 +16,16 @@ pattern, not translations of an entire Windows configuration. The Windows
 example is review-only. No GUI code, Lua, archives, icons, list data, or
 binary assets were copied from the reference.
 
+The running Windows Dev build inspected separately reported `21.1.7.313`
+in both the UI and executable properties, SHA-256
+`1a510d18c9df548bd943be6d4c69990d3060753bfbb988c62ed3eeba08ad07c0`.
+The official matching version tag resolves to
+`58bfe19a85eb5dc1685d6197fb5d897a41b4a8d1`; version matching is not a
+binary build attestation. The operator's checkout was at
+`ca23042c1c8d93416436078520b65fd3f2faab23` (2026-11-17). The live overview,
+navigation and stopped engine were visible; the other workflows were
+compared in source. No strategy, probe or network setting was activated.
+
 | Frozen feature family | Disposition and owner |
 | --- | --- |
 | Preset catalog, grouping, clone, ordering, raw review | Adopted into the Component's existing Strategy catalog and shared UI. A template has no runtime identity and imports always create a new record. |
@@ -26,7 +36,7 @@ binary assets were copied from the reference.
 | `--skip`, native `--template`/`--import`, unknown profile modifiers | Preview only. The typed runtime does not represent their effects; importing a file does not grant permission to expand or bypass profile scope. |
 | `--wf-*`, `--writable`, platform migration, driver controls | Windows/runtime owner, not a Linux strategy. Keep original source and show the exact flag. No driver, host filesystem or firewall settings are translated. |
 | `--ctrack-*`, `--ipcache-*`, queue, marks, debug | Engine/Planner-owned settings, not Strategy fields. Import cannot override them. |
-| `--lua-init`, external scripts or payload paths | Trust-restricted. Accepted built-ins use pinned runtime Lua; no uploaded Lua or executable input is run. |
+| `--lua-init`, external scripts or payload paths | Trust-restricted. Accepted built-ins use pinned runtime Lua. Administrator-authored, ZapretGUI and other external Lua source can be kept separately as inert drafts. Drafts do not resolve as Strategy dependencies and are never passed to the engine. |
 | Built-in ZIP/user directories, remote URLs, refresh | Only Solovey's bounded declarative ZIP schema, JSON and native text are accepted. Remote fetch/update, upstream file layouts and live watched directories are not used. |
 | BlockCheck, logs and browser fixes | Reuse the existing bounded outbound diagnostic and generation-scoped runtime evidence. No automatic strategy search, browser changes, arbitrary targets, or extra service. |
 | Tray, desktop UI, registry, updater, DNS/hosts mutation, Telegram proxy, legacy and premium features | Not ported. Existing Solovey owners retain lifecycle, DNS, routing, diagnostics and updates. |
@@ -35,7 +45,7 @@ binary assets were copied from the reference.
 
 | Resource | Limit and reason |
 | --- | --- |
-| Saved catalog (including unused lists and blobs) | 256 KiB serialized, shared with Product settings. Removed catalog-wide list/blob counts; inactive entries consume bytes, not runtime slots. |
+| Saved catalog (including unused lists, blobs and Lua drafts) | 256 KiB serialized, shared with Product settings. Removed catalog-wide list/blob counts; inactive entries consume bytes, not runtime slots. |
 | Import transfer | 256 KiB input and 256 KiB total uncompressed ZIP data, at most 128 regular entries with per-entry limits. Only declared text forms; no extraction. Namespace/size checks happen before entries are read. |
 | Native review and authoring | 64 KiB for inert source (covers the frozen corpus), 8 KiB for admitted editable text. Preview can explain text that cannot be stored as an active definition. |
 | Definition and packet scope | 8 KiB typed definition and up to 64 explicit ports per transport, matching the installed receiver and Host scope. Runtime argv and nft transaction size are separately bounded. |
@@ -50,3 +60,20 @@ replaces accepted file/declaration dependencies with managed references;
 unresolved options prevent saving. Native text export without its dependencies
 is rejected in favor of ZIP or JSON. No import implicitly assigns an outbound
 or applies runtime configuration.
+
+## Lua authoring and runtime
+
+The pinned `zapret-lib.lua`, `zapret-antidpi.lua` and `zapret-auto.lua`
+remain on their existing qualified paths. At the pinned engine commit,
+`nfq2/nfqws.c` drops UID before initializing Lua; `nfq2/sec.c` retains
+`CAP_NET_ADMIN` and `CAP_NET_RAW`. `nfq2/lua.c` opens the standard libraries
+and supplies native packet APIs in that same process. A file's author or a
+successful syntax check cannot isolate it from that authority. Unpinned
+code cannot be loaded or evaluated by the current runtime.
+
+The admin-only draft workflow supports create, edit, explicit UTF-8 source
+import, download and delete. Store origin and (for ZapretGUI or third-party
+source) a version, source or unknown-origin note. Import does not run or
+fetch anything. Drafts share the existing catalog revision and backup data;
+Strategy transfers do not carry them. No ZapretGUI library is bundled or
+declared compatible on the basis of the GUI's repository license.

@@ -132,6 +132,8 @@
         </v-list-item>
         <v-list-item v-if="!filteredBlobs.length" :title="t(namedBlobs.length ? 'zapretCatalog.noMatches' : 'zapretCatalog.noBlobs')" />
       </v-list>
+      <LuaDrafts :key="hostID" :search="assetSearch" :catalog-revision="view.revision" :storage-limit="view.storageLimit ?? presetBytes"
+        :disabled="busy" class="mt-5" @changed="refresh" />
     </section>
     <section v-if="section === 'runtime'" aria-labelledby="zapret-binding-status">
       <h2 id="zapret-binding-status" class="text-subtitle-1 mb-2">{{ t('zapretCatalog.bindings') }}</h2>
@@ -181,7 +183,7 @@
       <v-alert v-if="copiedEvidence" type="info" variant="tonal" class="mt-3" role="status">{{ t('zapretCatalog.evidenceCopied') }}</v-alert>
     </section>
     </template>
-    <section v-if="editing" aria-labelledby="zapret-editor-heading" data-testid="zapret-strategy-editor">
+    <section v-if="editing" ref="editorPage" aria-labelledby="zapret-editor-heading" data-testid="zapret-strategy-editor">
         <div class="d-flex flex-wrap align-center ga-2 mb-2">
           <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" :disabled="busy" @click="cancelDraft">{{ t('zapretCatalog.strategies') }}</v-btn>
           <v-icon icon="mdi-chevron-right" size="small" aria-hidden="true" />
@@ -331,8 +333,9 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
+import LuaDrafts from './LuaDrafts.vue'
 import PresetReview from './PresetReview.vue'
-import { catalogError, diagnose, draftToSave, exportRecord, loadCatalog, preview, saveCatalog, type CatalogView, type ExportFormat, type HTTPAction, type ListKind, type ListRefs, type NamedList, type NativeListField, type PresetTemplate, type Profile, type ProfileListRefs, type StrategyRecord, type StrategyReference } from './catalog'
+import { catalogError, diagnose, draftToSave, exportRecord, loadCatalog, presetBytes, preview, saveCatalog, type CatalogView, type ExportFormat, type HTTPAction, type ListKind, type ListRefs, type NamedList, type NativeListField, type PresetTemplate, type Profile, type ProfileListRefs, type StrategyRecord, type StrategyReference } from './catalog'
 
 const { t, te } = useI18n()
 const route = useRoute()
@@ -362,6 +365,7 @@ const editing = ref(false)
 const activeID = ref('')
 const editorRevision = ref('')
 const editorHeading = ref<HTMLElement>()
+const editorPage = ref<HTMLElement>()
 const originalName = ref('')
 const originalRaw = ref('')
 const effective = ref<StrategyRecord>()
@@ -565,7 +569,10 @@ function openDraft(record?: StrategyRecord, clone = false) {
   if (!record) addProfile()
   visualChanged.value = false
   editing.value = true
-  void nextTick(() => editorHeading.value?.focus({ preventScroll: true }))
+  void nextTick(() => {
+    editorPage.value?.scrollIntoView({ block: 'start' })
+    editorHeading.value?.focus({ preventScroll: true })
+  })
 }
 function cancelDraft() {
   if (!confirmDiscard()) return

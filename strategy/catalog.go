@@ -48,6 +48,7 @@ type Catalog struct {
 	Records    map[string]Record    `json:"records"`
 	Lists      map[string]NamedList `json:"lists,omitempty"`
 	BlobAssets map[string]string    `json:"blobAssets,omitempty"`
+	LuaDrafts  map[string]LuaDraft  `json:"luaDrafts,omitempty"`
 }
 
 type Draft struct {
@@ -191,6 +192,11 @@ func (c Catalog) Validate() error {
 	}
 	if err := c.validateBlobAssets(); err != nil {
 		return err
+	}
+	for id, draft := range c.LuaDrafts {
+		if err := draft.validate(id); err != nil {
+			return fmt.Errorf("Lua draft %q: %w", id, err)
+		}
 	}
 	for id, record := range c.Records {
 		if id != record.Definition.ID {

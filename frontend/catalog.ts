@@ -3,6 +3,9 @@ import api from '@solovey/component-ui/api'
 export type NativeListField = 'hostList' | 'hostListExclude' | 'ipSet' | 'ipSetExclude'
 export type ListKind = 'hostList' | 'ipSet'
 export type NamedList = { kind: ListKind; entries: string[] }
+export type LuaOrigin = 'administrator' | 'zapretgui' | 'external'
+export type LuaDraft = { origin: LuaOrigin; sourceRef?: string; source: string }
+export type LuaDraftView = { revision: string; drafts: Record<string, LuaDraft> | null }
 export type ProfileListRefs = Partial<Record<NativeListField, string>>
 export type ListRefs = Record<string, ProfileListRefs>
 export type HTTPAction = { name: 'http_domcase' | 'http_hostcase'; spell?: string; outRange?: string }
@@ -82,6 +85,15 @@ export async function loadCatalog(): Promise<CatalogView> {
   return unwrap(await api.get<Envelope<CatalogView>>(`${base}/strategies`))
 }
 export const saveCatalog = (change: object) => post<CatalogView>('strategies', change)
+export async function loadLuaDrafts(): Promise<LuaDraftView> {
+  return unwrap(await api.get<Envelope<LuaDraftView>>(`${base}/strategies/lua-drafts`))
+}
+export function saveLuaDraft(action: 'create' | 'edit' | 'delete', id: string, expectedRevision: string, draft?: LuaDraft) {
+  return post<LuaDraftView>('strategies/lua-drafts', {
+    action, id, expectedRevision,
+    ...(draft ? { draft: { ...draft, source: encodePresetBytes(new TextEncoder().encode(draft.source)) } } : {}),
+  })
+}
 export const preview = (draft: Draft, expectedRevision: string) => post<StrategyRecord & { visualEditable?: boolean }>('strategies/preview', { ...draft, expectedRevision })
 export const reviewPreset = (preset: PresetInput, expectedRevision: string) => post<PresetPreview>('strategies/import/preview', { preset, expectedRevision })
 export const savePreset = (preset: PresetInput, expectedRevision: string) => post<CatalogView>('strategies/import', { preset, expectedRevision })
