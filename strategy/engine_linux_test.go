@@ -65,6 +65,30 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	validateEngineArgs(t, root, argv)
+	for _, template := range PresetTemplates() {
+		if template.Compatibility != "adapted" {
+			continue
+		}
+		t.Run(template.ID, func(t *testing.T) {
+			validatePresetEngine(t, root, PresetInput{Format: "template", TemplateID: template.ID})
+		})
+	}
+	t.Run("managed-package", func(t *testing.T) {
+		validatePresetEngine(t, root, PresetInput{Format: "zip", Content: fixturePresetPackage(t, portablePreset)})
+	})
+}
+
+func validatePresetEngine(t *testing.T, root string, input PresetInput) {
+	t.Helper()
+	_, review, err := emptyPresetCatalog().PreparePreset("engine-preset", input)
+	if err != nil || review.Record == nil {
+		t.Fatalf("preset admission: %v, %+v", err, review.Issues)
+	}
+	argv, err := CompileBindings(root, 401, 0x40000000, []MarkedStrategy{{Strategy: review.Record.Definition, QueueMark: 0x120000}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	validateEngineArgs(t, root, argv)
 }
 
 func validateEngineArgs(t *testing.T, root string, argv []string) {

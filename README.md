@@ -58,17 +58,20 @@ The editor contribution uses the same catalog revision for list edits, preview
 and export; it requires the matching Product catalog API. Visual and native
 text edits preserve the references separately from the sealed list values.
 
-Use DNS names, IP addresses or CIDR prefixes for lists. The same catalog can
-store up to eight named QUIC decoys as hexadecimal bytes. Select one in a QUIC
+Use DNS names, IP addresses or CIDR prefixes for lists. The catalog stores
+named QUIC decoys as hexadecimal bytes within the catalog byte budget. Select one in a QUIC
 Initial profile or reference it in native editor text as
 `--lua-desync=fake:blob=asset_<id>:repeats=1`. A Strategy has a total custom
-blob budget of 1200 bytes. References are revision-bound and transfer with
+blob budget of 1200 bytes and up to eight named assets. References are revision-bound and transfer with
 their data; raw options never read a file or name a runtime Lua variable.
 Custom Lua and file references are not admitted. Treat blobs as public wire
 data, not secrets. Custom blobs need explicit installed host approval and do
 not satisfy protected QUIC DNS coverage. An unconditional built-in QUIC
 profile still has to cover unmatched traffic; a passive or custom profile
 cannot shadow it.
+
+See [Preset and strategy compatibility](PRESET_COMPATIBILITY.md) for the frozen
+reference, preview and package formats, and authoring versus runtime limits.
 
 ## Checks
 

@@ -39,10 +39,9 @@ func parseNative(id, text string) (Strategy, error) {
 	if len(text) > MaxNativeBytes {
 		return Strategy{}, nativeTextBudgetError(len(text))
 	}
-	for _, c := range text {
-		if !(c >= ' ' && c <= '~' || c == '\n' || c == '\r' || c == '\t') {
-			return Strategy{}, fmt.Errorf("%w: expected plain native options", ErrInvalidStrategy)
-		}
+	tokens, err := nativeSource(text)
+	if err != nil {
+		return Strategy{}, err
 	}
 	type draft struct {
 		Profile
@@ -68,14 +67,19 @@ func parseNative(id, text string) (Strategy, error) {
 		value.Profiles = append(value.Profiles, current.Profile)
 		return nil
 	}
-	for i, arg := range strings.Fields(text) {
+	for _, token := range tokens {
+		arg := token.text
 		key, input, hasValue := strings.Cut(arg, "=")
+		bad := token.invalid(fmt.Errorf("%w: unsupported, repeated, or malformed native option", ErrInvalidStrategy))
+		if strings.ContainsFunc(arg, func(c rune) bool { return c < '!' || c > '~' }) {
+			return Strategy{}, bad
+		}
 		if key == "--lua-init" {
-			return Strategy{}, fmt.Errorf("%w: %w", ErrInvalidStrategy, ErrUnsupportedCustomLua)
+			return Strategy{}, token.invalid(fmt.Errorf("%w: %w", ErrInvalidStrategy, ErrUnsupportedCustomLua))
 		}
 		if key == "--new" {
 			if err := finish(); err != nil {
-				return Strategy{}, err
+				return Strategy{}, token.invalid(err)
 			}
 			current = first(fmt.Sprintf("profile-%d", len(value.Profiles)+1))
 			if hasValue {
@@ -84,7 +88,6 @@ func parseNative(id, text string) (Strategy, error) {
 			}
 			continue
 		}
-		bad := fmt.Errorf("%w: unsupported or malformed native option %d", ErrInvalidStrategy, i+1)
 		repeatable := key == "--in-range" || key == "--out-range" || key == "--lua-desync" && (current.Circular != nil || len(current.HTTPActions) != 0)
 		if !hasValue || input == "" || current.seen[key] && !repeatable {
 			return Strategy{}, bad
@@ -94,7 +97,14 @@ func parseNative(id, text string) (Strategy, error) {
 		case "--name":
 			current.ID = input
 		case "--filter-l3":
-			current.Family = AddressFamily(input)
+			switch input {
+			case "ipv4,ipv6", "ipv6,ipv4":
+				// Explicitly matching both is identical to the engine default.
+			case string(IPv4), string(IPv6):
+				current.Family = AddressFamily(input)
+			default:
+				return Strategy{}, bad
+			}
 		case "--filter-tcp", "--filter-udp":
 			if current.Protocol != "" {
 				return Strategy{}, bad
@@ -105,7 +115,7 @@ func parseNative(id, text string) (Strategy, error) {
 			}
 			ports, err := parseNativePorts(input, current.Protocol)
 			if err != nil {
-				return Strategy{}, err
+				return Strategy{}, token.invalid(err)
 			}
 			current.Ports = ports
 		case "--filter-l7":
