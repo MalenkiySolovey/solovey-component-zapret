@@ -15,6 +15,7 @@ const (
 	CatalogSchema  = "solovey.zapret-catalog/v1"
 	TransferSchema = "solovey.zapret-transfer/v1"
 	EngineCommit   = "038c97e5819df10f8e8c22a2f1fffe57f2f7379b"
+	EngineVersion  = "v1.0.7"
 	EngineLicense  = "MIT"
 	// Matches the Product's serialized settings budget. Inactive records
 	// consume storage, not a slot in the running engine.
@@ -28,6 +29,18 @@ type Record struct {
 	Raw        string   `json:"raw"`
 	Definition Strategy `json:"definition"`
 	ListRefs   ListRefs `json:"listRefs,omitempty"`
+}
+
+// VisualEditable reports whether regenerating the native text from the typed
+// fields would preserve the original document, including comments and layout.
+func (r Record) VisualEditable() bool {
+	parsed, err := parseNative(r.Definition.ID, r.Raw)
+	if err != nil {
+		return false
+	}
+	parsed.BlobData = r.Definition.BlobData
+	formatted, err := FormatNative(parsed)
+	return err == nil && formatted == r.Raw
 }
 
 type Catalog struct {

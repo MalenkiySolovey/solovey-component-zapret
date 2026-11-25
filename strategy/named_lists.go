@@ -9,6 +9,9 @@ import (
 	"github.com/MalenkiySolovey/solovey-host/outbounds"
 )
 
+// NamedListLimit is the former catalog count limit. The serialized catalog
+// budget now bounds storage independently of the installed list limits.
+// Deprecated: use MaxCatalogBytes for catalog storage accounting.
 const NamedListLimit = 16
 
 type ListKind string
@@ -65,9 +68,6 @@ func (l NamedList) normalize() (NamedList, error) {
 }
 
 func (c Catalog) validateLists() error {
-	if len(c.Lists) > NamedListLimit {
-		return errors.New("too many named native lists")
-	}
 	for id, list := range c.Lists {
 		if n, err := list.normalize(); err != nil || !outbounds.ValidZapretStrategyRef(id) || !slices.Equal(n.Entries, list.Entries) {
 			return fmt.Errorf("invalid stored native list %q", id)
@@ -160,9 +160,6 @@ func (c Catalog) WithNamedList(id string, value *NamedList) (Catalog, error) {
 			c.Lists = make(map[string]NamedList)
 		}
 		c.Lists[id] = normalized
-		if len(c.Lists) > NamedListLimit {
-			return Catalog{}, errors.New("too many named native lists")
-		}
 	}
 	c.Records = maps.Clone(c.Records)
 	for ref, r := range c.Records {
@@ -205,33 +202,35 @@ func (c Catalog) WithTransfer(id string, t Transfer) (Catalog, error) {
 	if err := c.Validate(); err != nil {
 		return Catalog{}, err
 	}
-	if _, exists := c.Records[id]; exists {
-		return Catalog{}, errors.New("native strategy already exists")
-	}
 	draft, err := t.Import()
 	if err != nil {
 		return Catalog{}, err
 	}
+	draft.ID = id
+	return c.withImportedDraft(draft, t.Lists, t.BlobAssets)
+}
+
+func (c Catalog) withImportedDraft(draft Draft, lists map[string]NamedList, blobs map[string]string) (Catalog, error) {
+	if _, exists := c.Records[draft.ID]; exists {
+		return Catalog{}, errors.New("native strategy already exists")
+	}
 	c.Lists = maps.Clone(c.Lists)
-	if c.Lists == nil && len(t.Lists) > 0 {
+	if c.Lists == nil && len(lists) > 0 {
 		c.Lists = make(map[string]NamedList)
 	}
-	for name, list := range t.Lists {
+	for name, list := range lists {
 		if current, exists := c.Lists[name]; exists && (current.Kind != list.Kind || !slices.Equal(current.Entries, list.Entries)) {
 			return Catalog{}, fmt.Errorf("native list %q conflicts with an existing asset", name)
 		}
 		list.Entries = slices.Clone(list.Entries)
 		c.Lists[name] = list
 	}
-	if len(c.Lists) > NamedListLimit {
-		return Catalog{}, errors.New("too many named native lists")
-	}
-	if len(t.BlobAssets) != 0 {
+	if len(blobs) != 0 {
 		c.BlobAssets = maps.Clone(c.BlobAssets)
 		if c.BlobAssets == nil {
 			c.BlobAssets = make(map[string]string)
 		}
-		for name, data := range t.BlobAssets {
+		for name, data := range blobs {
 			if current, exists := c.BlobAssets[name]; exists && current != data {
 				return Catalog{}, fmt.Errorf("native blob %q conflicts with an existing asset", name)
 			}
@@ -241,13 +240,12 @@ func (c Catalog) WithTransfer(id string, t Transfer) (Catalog, error) {
 			return Catalog{}, err
 		}
 	}
-	draft.ID = id
 	record, err := c.SealDraft(draft)
 	if err != nil {
 		return Catalog{}, err
 	}
 	c.Records = maps.Clone(c.Records)
-	c.Records[id] = record
+	c.Records[draft.ID] = record
 	if err := c.checkSize(); err != nil {
 		return Catalog{}, err
 	}

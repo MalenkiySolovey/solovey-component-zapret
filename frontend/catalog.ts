@@ -42,7 +42,31 @@ export interface CatalogView {
   revision: string
   ready: boolean
   references: StrategyReference[]
+  templates?: PresetTemplate[]
+  nativeOnly?: string[]
+  engineVersion?: string
+  engineCommit?: string
+  storageUsed?: number
+  storageLimit?: number
+  preferenceKey?: string
 }
+export interface PresetTemplate {
+  id: string; name: string; description: string; category: string; compatibility: 'adapted' | 'preview-only'; profiles: number
+  origin: string; version: string; commit: string; sourcePath: string; license: string
+}
+export type PresetFormat = 'template' | 'native' | 'json' | 'zip'
+export type PresetInput = { format: PresetFormat; name?: string; templateId?: string; content?: string }
+export interface PresetPreview {
+  source?: string
+  profiles?: { name?: string; line: number; options?: string[] }[]
+  issues?: { option?: string; code: string; message: string; span?: { line: number; column: number; end: number } }[]
+  dependencies?: { source: string; id: string; kind: string; state: 'new' | 'reuse' | 'conflict' | 'missing' }[]
+  record?: StrategyRecord
+  converted?: boolean
+}
+export const presetBytes = 256 * 1024
+export const nativeReviewBytes = 64 * 1024
+export type ExportFormat = 'json' | 'zip' | 'native'
 export type Draft = { name: string; listRefs?: ListRefs } & ({ raw: string } | { profiles: Profile[] })
 
 interface Envelope<T> { success: boolean; msg: string; obj: T }
@@ -58,13 +82,34 @@ export async function loadCatalog(): Promise<CatalogView> {
   return unwrap(await api.get<Envelope<CatalogView>>(`${base}/strategies`))
 }
 export const saveCatalog = (change: object) => post<CatalogView>('strategies', change)
-export const preview = (draft: Draft, expectedRevision: string) => post<StrategyRecord>('strategies/preview', { ...draft, expectedRevision })
+export const preview = (draft: Draft, expectedRevision: string) => post<StrategyRecord & { visualEditable?: boolean }>('strategies/preview', { ...draft, expectedRevision })
+export const reviewPreset = (preset: PresetInput, expectedRevision: string) => post<PresetPreview>('strategies/import/preview', { preset, expectedRevision })
+export const savePreset = (preset: PresetInput, expectedRevision: string) => post<CatalogView>('strategies/import', { preset, expectedRevision })
 export const diagnose = (ref: StrategyReference, revision: string) => post<{ OK: boolean; Delay: number; Error: string }>('diagnose', {
   outboundRef: ref.outboundRef, strategyRef: ref.strategyRef, expectedRevision: revision,
 })
 
-export async function exportRecord(id: string, expectedRevision: string): Promise<unknown> {
-  return unwrap(await api.get<Envelope<unknown>>(`${base}/strategies/${encodeURIComponent(id)}/export`, { params: { expectedRevision } }))
+export async function exportRecord(id: string, expectedRevision: string, format: ExportFormat): Promise<Blob> {
+  const path = `${base}/strategies/${encodeURIComponent(id)}/export`
+  const params = { expectedRevision, format }
+  if (format === 'json') {
+    const data = unwrap(await api.get<Envelope<unknown>>(path, { params }))
+    return new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  }
+  const { data } = await api.get<Blob>(path, { params, responseType: 'blob' })
+  if (data.type.includes('application/json')) unwrap({ data: JSON.parse(await data.text()) as Envelope<unknown> })
+  return data
+}
+
+export function encodePresetBytes(data: Uint8Array): string {
+  let text = ''
+  for (let i = 0; i < data.length; i += 8192) text += String.fromCharCode(...data.subarray(i, i + 8192))
+  return btoa(text)
+}
+
+export function catalogError(err: unknown, fallback: string): string {
+  const detail = (err as { response?: { data?: { msg?: unknown } } })?.response?.data?.msg
+  return typeof detail === 'string' ? detail : err instanceof Error ? err.message : fallback
 }
 
 export function draftToSave(name: string, raw: string, profiles: Profile[], visualChanged: boolean, listRefs: ListRefs): Draft {
