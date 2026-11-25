@@ -68,5 +68,4 @@ export default { zapretCatalog: {
   desiredRevision: 'Desired revision', appliedRevision: 'Applied revision', copyEvidence: 'Copy redacted evidence', evidenceCopied: 'Redacted evidence copied.',
   draftRevision: 'Editing revision', discardDraft: 'Discard unsaved strategy changes?', effective: 'Validated native preview', validate: 'Validate',
   portSyntax: 'Enter port numbers or inclusive ranges, separated by commas (for example, 443,8000-8003).',
-  portBudget: 'A profile can admit at most 64 explicit ports for its transport.',
 } }

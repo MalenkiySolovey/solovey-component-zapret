@@ -62,12 +62,13 @@ func Resolve(binding outbounds.ZapretBinding, outbound DirectOutbound, source St
 		ResourceRef: intent.ZapretResourcePrefix + outbound.Ref, OutboundRef: outbound.Ref, StrategyRef: selected.ID,
 		StrategyRevision: selected.Revision, DesiredRevision: selected.Revision, InputRevision: outbound.Revision,
 		Purpose: intent.ZapretPurpose, TCPPorts: scope.TCP, UDPPorts: scope.UDP, NeedsReturn: scope.NeedsReturn,
+		TCPPortRanges: scope.TCPRanges, UDPPortRanges: scope.UDPRanges,
 		Directions: []intent.PacketDirection{intent.PacketDirectionOutbound},
 	}
-	if len(scope.TCP) != 0 {
+	if len(scope.TCP) != 0 || len(scope.TCPRanges) != 0 {
 		value.Protocols = append(value.Protocols, intent.PacketProtocolTCP)
 	}
-	if len(scope.UDP) != 0 {
+	if len(scope.UDP) != 0 || len(scope.UDPRanges) != 0 {
 		value.Protocols = append(value.Protocols, intent.PacketProtocolUDP)
 	}
 	if value.NeedsReturn {
