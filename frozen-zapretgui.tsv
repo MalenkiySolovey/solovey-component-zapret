@@ -469,7 +469,7 @@ winws2	Ростелеком.txt	8026fe254509b0c43e9f1365346a33d6acc07860	12095	w
 # 2	lua/custom_funcs.lua	not-in-public-tag
 # 3	lua/fakemultidisorder.lua	not-in-public-tag
 # 4	lua/fakemultisplit.lua	not-in-public-tag
-# 5	lua/zapret-antidpi.lua	pinned-engine-equivalent-name-only
-# 6	lua/zapret-auto.lua	pinned-engine-equivalent-name-only
-# 7	lua/zapret-lib.lua	pinned-engine-equivalent-name-only
+# 5	lua/zapret-antidpi.lua	pinned-engine-bytes-match-release
+# 6	lua/zapret-auto.lua	pinned-engine-bytes-match-release
+# 7	lua/zapret-lib.lua	pinned-engine-bytes-match-release
 # 8	lua/zapret-multishake.lua	not-in-public-tag
