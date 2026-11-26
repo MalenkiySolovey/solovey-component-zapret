@@ -70,7 +70,7 @@ compared in source. No strategy, probe or network setting was activated.
 | `--skip`, native `--template`/`--import`, unknown profile modifiers | Preview only. The typed runtime does not represent their effects; importing a file does not grant permission to expand or bypass profile scope. |
 | `--wf-*`, `--writable`, platform migration, driver controls | Windows/runtime owner, not a Linux strategy. Keep original source and show the exact flag. No driver, host filesystem or firewall settings are translated. |
 | `--ctrack-*`, `--ipcache-*`, queue, marks, debug | Engine/Planner-owned settings, not Strategy fields. Import cannot override them. |
-| `--lua-init`, external scripts or payload paths | Trust-restricted. Accepted built-ins use pinned runtime Lua. Administrator-authored, ZapretGUI and other external Lua source can be kept separately as inert drafts. Drafts do not resolve as Strategy dependencies and are never passed to the engine. |
+| `--lua-init`, external scripts or payload paths | Host paths and raw engine initializers are not admitted. Managed Lua can use revision-selected administrator source and compatible imported libraries in explicit load order. Imported code requires consent, and the Host must delegate execution. The managed callback API has read-only packet observation, private flow state and PASS/DROP; libraries requiring transmission, packet mutation, global built-in state or host I/O need a different authority boundary. Pinned built-ins are unchanged. |
 | Built-in ZIP/user directories, remote URLs, refresh | Solovey ZIP, JSON and native text, plus version 1 ZapretGUI portable ZIP for supported native text and complete standalone lists. No filesystem extraction or automatic apply. Remote fetch/update and live watched directories are not used. |
 | BlockCheck, logs and browser fixes | Reuse the existing bounded outbound diagnostic and generation-scoped runtime evidence. No automatic strategy search, browser changes, arbitrary targets, or extra service. |
 | Tray, desktop UI, registry, updater, DNS/hosts mutation, Telegram proxy, legacy and premium features | Not ported. Existing Solovey owners retain lifecycle, DNS, routing, diagnostics and updates. |
@@ -79,7 +79,7 @@ compared in source. No strategy, probe or network setting was activated.
 
 | Resource | Limit and reason |
 | --- | --- |
-| Saved catalog (including unused lists, blobs and Lua drafts) | 256 KiB serialized, shared with Product settings. Removed catalog-wide list/blob counts; inactive entries consume bytes, not runtime slots. |
+| Saved catalog (including unused lists, blobs and Lua revisions) | 256 KiB serialized, shared with Product settings. Removed catalog-wide list/blob counts; only selected exact Lua revisions are staged into the engine. |
 | Import transfer | 256 KiB input and 256 KiB total uncompressed ZIP data, at most 128 regular entries with per-entry limits. Only declared text forms and bounded opaque QUIC data; no extraction. Namespace/size checks happen before entries are read. |
 | Native review and authoring | 64 KiB for inert source (covers the frozen corpus), 8 KiB for admitted editable text. Preview can explain text that cannot be stored as an active definition. |
 | Definition and packet scope | 8 KiB typed definition. Scopes of up to 64 ports retain the legacy representation for stable revisions; larger positive scopes use disjoint inclusive intervals instead of a per-port array. Runtime argv and nft transaction size are separately bounded. A Product with an older Planner and broker does not admit the new interval representation. |
@@ -90,6 +90,7 @@ compared in source. No strategy, probe or network setting was activated.
 `strategy.txt` packages may also carry `lists/<id>.txt` and
 `blobs/<id>.hex` or `blobs/<id>.bin`; `strategy.json` packages contain only that file. Exported
 ZIP and JSON preserve the sealed record, raw text, and its dependencies.
+Import preserves the selected Lua sources and order, not their execution consent.
 Converted native source is shown alongside the original. Conversion only
 replaces accepted file/declaration dependencies with managed references;
 unresolved options prevent saving. Native text export without its dependencies

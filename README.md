@@ -36,7 +36,7 @@ uses ordered variants of the pinned `zapret-auto.lua` action. The compiler
 requires an already-admitted return path before producing Circular arguments;
 the installed outgoing-only profile still rejects activation. Native options
 and the visual editor both preserve variant order and the reply observation
-window. Arbitrary Lua and external file references remain unsupported.
+window. Host filesystem references remain unsupported.
 Static split, QUIC and ordered HTTP actions support native `--out-range`.
 Use `a` (always), `x` (never), or a range such as `-d3`, `n2<n8`, or `b100-`.
 Counters are packets (`n`), data packets (`d`), bytes (`b`), and, on TCP,
@@ -66,11 +66,27 @@ limited to 1200 bytes. Referenced blobs share the sealed definition and
 engine argument budgets with the rest of the applied strategy. References are
 revision-bound and transfer with their data; raw options never read a file or
 name a runtime Lua variable.
-Custom Lua and file references are not admitted. Treat blobs as public wire
-data, not secrets. Custom blobs need explicit installed host approval and do
-not satisfy protected QUIC DNS coverage. An unconditional built-in QUIC
+Treat blobs as public wire data, not secrets. Custom blobs need explicit
+installed Host approval and do not satisfy protected QUIC DNS coverage. An unconditional built-in QUIC
 profile still has to cover unmatched traffic; a passive or custom profile
 cannot shadow it.
+
+## Managed Lua
+
+Administrators can author or import Lua source, select exact revisions in load
+order on a Strategy, and call their global functions in native `--lua-desync`
+actions. Imported source requires a provenance note and explicit consent for
+the selected revision. Saving or importing source alone does not execute it.
+The installed Host must separately delegate managed Lua. Exported Strategy
+packages retain dependencies and order but do not transfer execution consent.
+
+The original nfqws2 interpreter loads managed code into a separate environment
+per Strategy. Callbacks receive a copy of the selected packet data and their
+own per-flow Lua state. They can inspect data and return pass or drop; packet
+mutation, raw transmission, shell, filesystem and arbitrary module loading are
+not available in that environment. This is not the entire upstream Lua API.
+Pinned built-ins retain their existing execution and packet behavior. New or
+changed active selections are initialized before the live plan is retired.
 
 See [Preset and strategy compatibility](PRESET_COMPATIBILITY.md) for the frozen
 reference, preview and package formats, and authoring versus runtime limits.

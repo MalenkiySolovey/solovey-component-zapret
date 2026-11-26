@@ -102,7 +102,7 @@ func (c Catalog) WithNamedBlob(id string, data *string) (Catalog, error) {
 		if _, used := record.Definition.BlobData[id]; !used {
 			continue
 		}
-		next, err := c.SealDraft(Draft{ID: ref, Name: record.Name, Raw: &record.Raw, ListRefs: record.ListRefs})
+		next, err := c.SealDraft(Draft{ID: ref, Name: record.Name, Raw: &record.Raw, ListRefs: record.ListRefs, ManagedLua: record.Definition.ManagedLua})
 		if err != nil {
 			return Catalog{}, fmt.Errorf("native blob %q is used by strategy %q: %w", id, ref, err)
 		}

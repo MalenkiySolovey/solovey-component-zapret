@@ -60,7 +60,7 @@ jobs:
               ip link set lo up
               exec "$1" -test.run "^TestPinnedEngineQueueOverloadDrops$" -test.v -test.timeout=30s
             ' _ "$RUNNER_TEMP/zapret-queue-test"
-      - name: Observe native matches without payload logging in a disposable namespace
+      - name: Verify native trace and managed Lua in a disposable namespace
         run: |
           test "$GITHUB_ACTIONS" = true
           commit=$(node -p "require('./upstream/zapret2.json').commit")
@@ -78,5 +78,5 @@ jobs:
           sudo unshare --net -- env SOLOVEY_TEST_PARENT_NETNS="$(readlink /proc/self/ns/net)" \
             SOLOVEY_TEST_ENGINE_ROOT="$engine" SOLOVEY_TEST_QUIC_INITIAL="$RUNNER_TEMP/quic-initial.bin" bash -euc '
               ip link set lo up
-              exec "$1" -test.run "^TestPinnedEngineReportsMatchedNativeProfiles$" -test.v -test.timeout=30s
+              exec "$1" -test.run "^TestPinnedEngine(ReportsMatchedNativeProfiles|RunsManagedLua)$" -test.v -test.timeout=30s
             ' _ "$RUNNER_TEMP/zapret-queue-test"

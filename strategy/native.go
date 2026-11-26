@@ -14,7 +14,7 @@ import (
 const MaxNativeBytes = 8 << 10
 const minimumNativeProfileBytes = len("--filter-tcp=1")
 
-var ErrUnsupportedCustomLua = errors.New("UNSUPPORTED_CUSTOM_LUA: custom Lua is not admitted; use a qualified built-in action")
+var ErrUnsupportedCustomLua = errors.New("UNSUPPORTED_CUSTOM_LUA: select managed Lua source revisions instead of loading a host file or inline Lua")
 
 func nativeTextBudgetError(used int) error {
 	return fmt.Errorf("%w: native text requires at least %d bytes; limit is %d bytes", ErrInvalidStrategy, used, MaxNativeBytes)
@@ -32,6 +32,10 @@ func ParseNative(id, text string) (Strategy, error) {
 }
 
 func parseNative(id, text string) (Strategy, error) {
+	return parseNativeWithLua(id, text, nil)
+}
+
+func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, error) {
 	if len(text) > MaxNativeBytes {
 		return Strategy{}, nativeTextBudgetError(len(text))
 	}
@@ -49,10 +53,18 @@ func parseNative(id, text string) (Strategy, error) {
 		return draft{Profile: Profile{ID: id}, seen: map[string]bool{}}
 	}
 	current := first("profile-1")
-	value := Strategy{Schema: Schema, ID: id}
+	value := Strategy{Schema: Schema, ID: id, ManagedLua: managed}
 	finish := func() error {
 		if current.outRangePending {
 			return fmt.Errorf("%w: --out-range needs a following action in native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
+		}
+		if len(current.LuaActions) != 0 {
+			if current.Protocol == "" || current.inRange != "" {
+				return fmt.Errorf("%w: managed Lua requires an admitted outgoing TCP or UDP profile", ErrInvalidStrategy)
+			}
+			current.Payload, current.L7Filter = "", current.l7
+			value.Profiles = append(value.Profiles, current.Profile)
+			return nil
 		}
 		if current.Protocol == "" || !current.Pass && current.seen["--payload"] != current.seen["--lua-desync"] ||
 			!current.Pass && current.hasAction() && (current.l7 == "" || payloadProtocol(current.Payload) != current.l7) ||
@@ -86,7 +98,8 @@ func parseNative(id, text string) (Strategy, error) {
 			}
 			continue
 		}
-		repeatable := key == "--in-range" || key == "--out-range" || key == "--lua-desync" && (current.Circular != nil || len(current.HTTPActions) != 0)
+		repeatable := key == "--in-range" || key == "--out-range" || key == "--lua-desync" && (current.Circular != nil || len(current.HTTPActions) != 0 || len(current.LuaActions) != 0) ||
+			key == "--payload" && len(current.LuaActions) != 0
 		if !hasValue || input == "" || current.seen[key] && !repeatable {
 			return Strategy{}, bad
 		}
@@ -150,6 +163,22 @@ func parseNative(id, text string) (Strategy, error) {
 			}
 			current.Payload = Payload(input)
 		case "--lua-desync":
+			if len(managed) != 0 && !builtInLuaAction(input) {
+				if current.hasAction() && len(current.LuaActions) == 0 {
+					return Strategy{}, token.invalid(fmt.Errorf("%w: mixing an installed built-in action and a managed callback in one profile is not yet supported", ErrInvalidStrategy))
+				}
+				name, arguments, _ := strings.Cut(input, ":")
+				action := LuaAction{Function: name, Arguments: arguments, Payload: current.Payload, OutRange: current.outRange}
+				if !action.valid() {
+					return Strategy{}, bad
+				}
+				current.LuaActions = append(current.LuaActions, action)
+				current.outRangePending = false
+				continue
+			}
+			if len(current.LuaActions) != 0 {
+				return Strategy{}, token.invalid(fmt.Errorf("%w: mixing an installed built-in action and a managed callback in one profile is not yet supported", ErrInvalidStrategy))
+			}
 			if current.Circular != nil {
 				if current.inRange != circularVariantRange || !current.seen["--payload"] || !current.Circular.addVariant(input) {
 					return Strategy{}, bad
@@ -231,6 +260,14 @@ func parseNative(id, text string) (Strategy, error) {
 	return value, nil
 }
 
+func builtInLuaAction(input string) bool {
+	if _, ok := parseHTTPAction(input); ok {
+		return true
+	}
+	return input == "pass" || input == "circular" || strings.HasPrefix(input, "circular:fails=") ||
+		strings.HasPrefix(input, "multisplit:pos=") || strings.HasPrefix(input, "fake:blob=")
+}
+
 func parseNativePorts(input string, protocol intent.PacketProtocol) ([]intent.PortInterval, error) {
 	var ports []intent.PortInterval
 	for field := range strings.SplitSeq(input, ",") {
@@ -299,6 +336,12 @@ func FormatNative(value Strategy) (string, error) {
 		}
 		if profile.Circular != nil {
 			for _, arg := range profile.circularArgs("", false) {
+				fmt.Fprintln(&text, arg)
+			}
+			continue
+		}
+		if len(profile.LuaActions) != 0 {
+			for _, arg := range profile.appendManagedLuaActions(nil, nil, "") {
 				fmt.Fprintln(&text, arg)
 			}
 			continue

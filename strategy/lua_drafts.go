@@ -11,13 +11,16 @@ import (
 	"github.com/MalenkiySolovey/solovey-host/outbounds"
 )
 
-// LuaDraft is authoring data. It is never referenced by a Strategy, passed to
-// a Lua interpreter, or written to any runtime engine path.
+// LuaDraft is inert authoring data. Execution requires separate selection of
+// an exact revision and an explicit grant from the installed Host.
 type LuaDraft struct {
 	Origin    string `json:"origin"`
 	SourceRef string `json:"sourceRef,omitempty"`
 	Source    string `json:"source"`
+	Imported  bool   `json:"imported,omitempty"`
 }
+
+func (d LuaDraft) RequiresApproval() bool { return d.Imported || d.Origin != "administrator" }
 
 func (d LuaDraft) validate(id string) error {
 	if !outbounds.ValidZapretStrategyRef(id) {
@@ -26,11 +29,11 @@ func (d LuaDraft) validate(id string) error {
 	switch d.Origin {
 	case "administrator":
 	case "zapretgui", "external":
-		if d.SourceRef == "" {
-			return errors.New("record the Lua source, version or that the origin is unknown")
-		}
 	default:
 		return errors.New("select a Lua draft origin")
+	}
+	if d.RequiresApproval() && d.SourceRef == "" {
+		return errors.New("record the Lua source, version or that the origin is unknown")
 	}
 	if len(d.SourceRef) > 240 || !utf8.ValidString(d.SourceRef) || strings.TrimSpace(d.SourceRef) != d.SourceRef || strings.ContainsFunc(d.SourceRef, unicode.IsControl) {
 		return errors.New("Lua source reference must be one line of at most 240 UTF-8 bytes")
@@ -48,6 +51,7 @@ func (c Catalog) WithLuaDraft(id string, draft *LuaDraft) (Catalog, error) {
 	if err := c.Validate(); err != nil {
 		return Catalog{}, err
 	}
+	c = c.retainLuaRevision(id)
 	c.LuaDrafts = maps.Clone(c.LuaDrafts)
 	if draft == nil {
 		if _, ok := c.LuaDrafts[id]; !ok {
@@ -55,14 +59,19 @@ func (c Catalog) WithLuaDraft(id string, draft *LuaDraft) (Catalog, error) {
 		}
 		delete(c.LuaDrafts, id)
 	} else {
-		if err := draft.validate(id); err != nil {
+		next := *draft
+		if old, exists := c.LuaDrafts[id]; exists {
+			next.Imported = next.Imported || old.Imported || (old.RequiresApproval() && next.Origin == "administrator")
+		}
+		if err := next.validate(id); err != nil {
 			return Catalog{}, err
 		}
 		if c.LuaDrafts == nil {
 			c.LuaDrafts = make(map[string]LuaDraft)
 		}
-		c.LuaDrafts[id] = *draft
+		c.LuaDrafts[id] = next
 	}
+	c = c.PruneLuaRevisions()
 	if err := c.checkSize(); err != nil {
 		return Catalog{}, err
 	}

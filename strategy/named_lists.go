@@ -166,7 +166,7 @@ func (c Catalog) WithNamedList(id string, value *NamedList) (Catalog, error) {
 		if _, usesList := namedListIDs(r.ListRefs)[id]; !usesList {
 			continue
 		}
-		next, err := c.SealDraft(Draft{ID: ref, Name: r.Name, Raw: &r.Raw, ListRefs: r.ListRefs})
+		next, err := c.SealDraft(Draft{ID: ref, Name: r.Name, Raw: &r.Raw, ListRefs: r.ListRefs, ManagedLua: r.Definition.ManagedLua})
 		if err != nil {
 			return Catalog{}, fmt.Errorf("native list %q is used by strategy %q: %w", id, ref, err)
 		}
@@ -192,6 +192,22 @@ func (c Catalog) Export(id string) (Transfer, error) {
 		list := c.Lists[id]
 		list.Entries = slices.Clone(list.Entries)
 		t.Lists[id] = list
+	}
+	if refs := r.Definition.ManagedLua; len(refs) != 0 {
+		modules, err := c.resolveLua(refs, false)
+		if err != nil {
+			return Transfer{}, err
+		}
+		t.LuaSources = make(map[string]LuaDraft, len(refs))
+		t.Strategy.Definition.ManagedLua = slices.Clone(refs)
+		for i, ref := range refs {
+			t.LuaSources[ref.key()] = modules[i].Draft
+			t.Strategy.Definition.ManagedLua[i].ApproveImported = false
+		}
+		t.Strategy.Definition, err = Seal(t.Strategy.Definition)
+		if err != nil {
+			return Transfer{}, err
+		}
 	}
 	return t, nil
 }
@@ -238,6 +254,24 @@ func (c Catalog) withImportedDraft(draft Draft, lists map[string]NamedList, blob
 		}
 		if err := c.validateBlobAssets(); err != nil {
 			return Catalog{}, err
+		}
+	}
+	if len(draft.luaSources) != 0 {
+		c.LuaDrafts = maps.Clone(c.LuaDrafts)
+		c.LuaRevisions = maps.Clone(c.LuaRevisions)
+		if c.LuaDrafts == nil {
+			c.LuaDrafts = make(map[string]LuaDraft)
+		}
+		if c.LuaRevisions == nil {
+			c.LuaRevisions = make(map[string]LuaDraft)
+		}
+		for _, ref := range draft.ManagedLua {
+			source := draft.luaSources[ref.key()]
+			if current, exists := c.LuaDrafts[ref.ID]; !exists {
+				c.LuaDrafts[ref.ID] = source
+			} else if current.Revision() != ref.Revision {
+				c.LuaRevisions[ref.key()] = source
+			}
 		}
 	}
 	record, err := c.SealDraft(draft)

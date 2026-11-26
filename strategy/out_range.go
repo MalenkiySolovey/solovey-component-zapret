@@ -68,6 +68,15 @@ func (p *Profile) sealOutRanges() error {
 			return fmt.Errorf("HTTP action %d: %w", i+1, err)
 		}
 	}
+	for i := range p.LuaActions {
+		action := &p.LuaActions[i]
+		if hasPorts(p.UDPPorts, p.UDPRanges) {
+			protocol = intent.PacketProtocolUDP
+		}
+		if action.OutRange, err = sealOutRange(action.OutRange, protocol); err != nil {
+			return fmt.Errorf("Lua action %d: %w", i+1, err)
+		}
+	}
 	return nil
 }
 

@@ -4,8 +4,9 @@ export type NativeListField = 'hostList' | 'hostListExclude' | 'ipSet' | 'ipSetE
 export type ListKind = 'hostList' | 'ipSet'
 export type NamedList = { kind: ListKind; entries: string[] }
 export type LuaOrigin = 'administrator' | 'zapretgui' | 'external'
-export type LuaDraft = { origin: LuaOrigin; sourceRef?: string; source: string }
-export type LuaDraftView = { revision: string; drafts: Record<string, LuaDraft> | null }
+export type LuaDraft = { origin: LuaOrigin; sourceRef?: string; source: string; imported?: boolean }
+export type LuaReference = { id: string; revision: string; approveImported?: boolean }
+export type LuaDraftView = { revision: string; drafts: Record<string, LuaDraft> | null; draftRevisions?: Record<string, string>; revisionSources?: Record<string, LuaDraft> }
 export type ProfileListRefs = Partial<Record<NativeListField, string>>
 export type ListRefs = Record<string, ProfileListRefs>
 export type HTTPAction = { name: 'http_domcase' | 'http_hostcase'; spell?: string; outRange?: string }
@@ -42,7 +43,7 @@ export function profilePorts(profile: Pick<Profile, 'protocol' | 'ports' | 'udpP
 export interface StrategyRecord {
   name: string
   raw: string
-  definition: { id: string; revision: string; assets?: string[]; profiles: Profile[] }
+  definition: { id: string; revision: string; assets?: string[]; profiles: Profile[]; managedLua?: LuaReference[] }
   listRefs?: ListRefs
   origin?: PresetOrigin
 }
@@ -80,14 +81,14 @@ export interface PresetPreview {
   origin?: PresetOrigin
   profiles?: { name?: string; line: number; options?: string[] }[]
   issues?: { option?: string; code: string; message: string; span?: { line: number; column: number; end: number } }[]
-  dependencies?: { source: string; id: string; kind: string; state: 'new' | 'reuse' | 'conflict' | 'missing'; canRename?: boolean }[]
+  dependencies?: { source: string; id: string; kind: string; state: 'new' | 'reuse' | 'conflict' | 'missing' | 'needs-approval'; canRename?: boolean }[]
   record?: StrategyRecord
   converted?: boolean
 }
 export const presetBytes = 256 * 1024
 export const nativeReviewBytes = 64 * 1024
 export type ExportFormat = 'json' | 'zip' | 'native'
-export type Draft = { name: string; listRefs?: ListRefs } & ({ raw: string } | { profiles: Profile[] })
+export type Draft = { name: string; listRefs?: ListRefs; managedLua?: LuaReference[] } & ({ raw: string } | { profiles: Profile[] })
 
 interface Envelope<T> { success: boolean; msg: string; obj: T }
 const base = 'api/components/zapret'
@@ -105,10 +106,10 @@ export const saveCatalog = (change: object) => post<CatalogView>('strategies', c
 export async function loadLuaDrafts(): Promise<LuaDraftView> {
   return unwrap(await api.get<Envelope<LuaDraftView>>(`${base}/strategies/lua-drafts`))
 }
-export function saveLuaDraft(action: 'create' | 'edit' | 'delete', id: string, expectedRevision: string, draft?: LuaDraft) {
+export function saveLuaDraft(action: 'create' | 'edit' | 'import' | 'delete', id: string, expectedRevision: string, draft?: LuaDraft) {
   return post<LuaDraftView>('strategies/lua-drafts', {
     action, id, expectedRevision,
-    ...(draft ? { draft: { ...draft, source: encodePresetBytes(new TextEncoder().encode(draft.source)) } } : {}),
+    ...(draft ? { draft: { origin: draft.origin, sourceRef: draft.sourceRef, source: encodePresetBytes(new TextEncoder().encode(draft.source)) } } : {}),
   })
 }
 export const preview = (draft: Draft, expectedRevision: string) => post<StrategyRecord & { visualEditable?: boolean }>('strategies/preview', { ...draft, expectedRevision })
@@ -141,7 +142,7 @@ export function catalogError(err: unknown, fallback: string): string {
   return typeof detail === 'string' ? detail : err instanceof Error ? err.message : fallback
 }
 
-export function draftToSave(name: string, raw: string, profiles: Profile[], visualChanged: boolean, listRefs: ListRefs): Draft {
+export function draftToSave(name: string, raw: string, profiles: Profile[], visualChanged: boolean, listRefs: ListRefs, managedLua: LuaReference[] = []): Draft {
   const source = visualChanged ? { profiles } : { raw }
-  return { name, ...source, ...(Object.keys(listRefs).length ? { listRefs } : {}) }
+  return { name, ...source, ...(Object.keys(listRefs).length ? { listRefs } : {}), ...(managedLua.length ? { managedLua } : {}) }
 }
