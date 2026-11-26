@@ -17,10 +17,6 @@ import (
 
 const Schema = "solovey.zapret-strategy/v1"
 
-// MaxDefinitionBytes is the installed activation envelope's per-definition
-// limit, independent of the catalog, native input, and engine argv budgets.
-const MaxDefinitionBytes = 8 << 10
-
 type AssetRef string
 
 const (
@@ -100,9 +96,6 @@ func Seal(value Strategy) (Strategy, error) {
 	if value.Schema != Schema || !outbounds.ValidZapretStrategyRef(value.ID) || len(value.Profiles) == 0 || len(value.Assets) > 3 {
 		return Strategy{}, ErrInvalidStrategy
 	}
-	if len(value.Profiles) > MaxNativeBytes/minimumNativeProfileBytes {
-		return Strategy{}, nativeTextBudgetError(len(value.Profiles) * minimumNativeProfileBytes)
-	}
 	value.Assets = slices.Clone(value.Assets)
 	value.Profiles = slices.Clone(value.Profiles)
 	value.BlobData = maps.Clone(value.BlobData)
@@ -111,7 +104,6 @@ func Seal(value Strategy) (Strategy, error) {
 		return Strategy{}, fmt.Errorf("%w: invalid managed Lua selection", ErrInvalidStrategy)
 	}
 	seen := map[string]bool{}
-	listBytes := maxNativeListBytes
 	needsReturn := false
 	usesManagedLua := false
 	for i, profile := range value.Profiles {
@@ -135,7 +127,7 @@ func Seal(value Strategy) (Strategy, error) {
 			return Strategy{}, ErrInvalidStrategy
 		}
 		if profile.Lists != nil {
-			lists, err := profile.Lists.seal(&listBytes)
+			lists, err := profile.Lists.seal()
 			if err != nil {
 				return Strategy{}, fmt.Errorf("%w: invalid native lists in profile %q", err, profile.ID)
 			}
@@ -174,9 +166,6 @@ func Seal(value Strategy) (Strategy, error) {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return Strategy{}, ErrInvalidStrategy
-	}
-	if size := len(data) + sha256.Size*2; len(value.BlobData) != 0 && size > MaxDefinitionBytes {
-		return Strategy{}, fmt.Errorf("%w: sealed definition requires %d bytes; installation limit is %d bytes", ErrInvalidStrategy, size, MaxDefinitionBytes)
 	}
 	value.Revision = fmt.Sprintf("%x", sha256.Sum256(data))
 	return value, nil

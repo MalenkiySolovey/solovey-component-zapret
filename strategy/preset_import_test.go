@@ -179,7 +179,7 @@ func TestPresetZIPAcceptsOnlyBoundedRegularDataFiles(t *testing.T) {
 	for _, extra := range []zipSource{
 		{name: "../strategy.txt"}, {name: "lists\\site.txt"}, {name: "lists/../../script.txt"}, {name: "Lists/site.txt"},
 		{name: "script.lua"}, {name: "lists/site.exe"}, {name: "lists/site.txt", mode: fs.ModeSymlink | 0777},
-		{name: "strategy.txt"}, {name: "lists/site.txt", contents: strings.Repeat("a", maxNativeListBytes*2+1)},
+		{name: "strategy.txt"}, {name: "lists/site.txt", contents: strings.Repeat("a", MaxPresetBytes+1)},
 	} {
 		data := presetZIP(t, []zipSource{{name: "strategy.txt", contents: "--filter-tcp=443"}, extra})
 		_, review, err := emptyPresetCatalog().PreparePreset("invalid", PresetInput{Format: "zip", Content: data})
@@ -193,7 +193,7 @@ func TestPresetZIPAcceptsOnlyBoundedRegularDataFiles(t *testing.T) {
 	}
 }
 
-func TestStoredAssetsUseCatalogBudgetNotSimultaneousActivationLimits(t *testing.T) {
+func TestInactiveAssetsDoNotConsumeTheActivationBudget(t *testing.T) {
 	c := emptyPresetCatalog()
 	var err error
 	for i := range 20 {
@@ -207,13 +207,14 @@ func TestStoredAssetsUseCatalogBudgetNotSimultaneousActivationLimits(t *testing.
 		}
 	}
 	if c.Validate() != nil || len(c.BlobAssets) != 20 || len(c.Lists) != 20 {
-		t.Fatal("catalog rejected inactive dependencies below the serialized storage budget")
+		t.Fatal("catalog rejected valid inactive dependencies")
 	}
 	for i := range 140 {
 		c.BlobAssets[fmt.Sprintf("large-%d", i)] = strings.Repeat("40", MaxNativeBlobBytes)
 	}
-	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "storage limit") {
-		t.Fatalf("serialized catalog budget no longer bounds inactive assets: %v", err)
+	data, err := json.Marshal(c)
+	if err != nil || len(data) <= 256<<10 || c.Validate() != nil {
+		t.Fatalf("valid inactive assets above the old limit did not survive: %d bytes, %v", len(data), err)
 	}
 }
 

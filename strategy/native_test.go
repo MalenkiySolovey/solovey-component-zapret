@@ -378,7 +378,6 @@ func TestNativeProfileRejectsExecutorAndAuthorityOptions(t *testing.T) {
 		"--filter-tcp=443 --hostlist-domains=^a.test",
 		"--filter-tcp=443 --ipset-ip=fe80::1%eth0",
 		"--filter-tcp=443 --ipset-exclude-ip=2001:db8::1/129",
-		"--filter-tcp=443 --hostlist-domains=" + strings.Repeat("a.test,", maxNativeListBytes/len("a.test,")+1) + "b.test",
 		"--filter-tcp=443 --filter-l3=all",
 		"--filter-udp=443 --filter-tcp=443 --filter-udp=853",
 		strings.Replace(circularFixture, "--filter-tcp=443", "--filter-tcp=443 --filter-udp=443", 1),
@@ -391,7 +390,6 @@ func TestNativeProfileRejectsExecutorAndAuthorityOptions(t *testing.T) {
 		"--filter-tcp=443 --filter-l7=http --payload=tls_client_hello --lua-desync=multisplit:pos=9",
 		"--filter-tcp=443 --filter-l7=tls --payload=tls_client_hello --lua-desync=multisplit:pos=9:extra=1",
 		"--filter-tcp=443 --new",
-		strings.Repeat(" ", MaxNativeBytes+1),
 	} {
 		if _, err := ParseNative("fixture", raw); !errors.Is(err, ErrInvalidStrategy) {
 			t.Fatalf("accepted unqualified native profile %q: %v", raw, err)

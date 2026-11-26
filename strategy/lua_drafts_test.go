@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestLuaDraftsAreInertAndShareCatalogBudget(t *testing.T) {
+func TestLuaDraftsAreInertAndUseOnlyPerSourceInputBudget(t *testing.T) {
 	base := Catalog{Schema: CatalogSchema, Records: map[string]Record{}}
 	const raw = "--name=first\n--filter-tcp=443\n"
 	var err error
@@ -28,8 +28,11 @@ func TestLuaDraftsAreInertAndShareCatalogBudget(t *testing.T) {
 	if err != nil || json.Unmarshal(data, &restored) != nil || restored.Validate() != nil || restored.LuaDrafts["vendor-example"] != draft {
 		t.Fatal("catalog round trip did not preserve the draft")
 	}
-	if _, err := next.WithLuaDraft("overflow", &LuaDraft{Origin: "administrator", Source: strings.Repeat("a", MaxCatalogBytes)}); err == nil || !strings.Contains(err.Error(), "storage limit") {
-		t.Fatalf("missing shared catalog budget: %v", err)
+	if _, err := next.WithLuaDraft("full-size", &LuaDraft{Origin: "administrator", Source: strings.Repeat("a", MaxLuaSourceBytes)}); err != nil {
+		t.Fatalf("source at the per-source limit should fit alongside other entries: %v", err)
+	}
+	if _, err := next.WithLuaDraft("overflow", &LuaDraft{Origin: "administrator", Source: strings.Repeat("a", MaxLuaSourceBytes+1)}); err == nil || !strings.Contains(err.Error(), "one source is limited") {
+		t.Fatalf("missing per-source limit: %v", err)
 	}
 	if _, err := next.WithLuaDraft("binary", &LuaDraft{Origin: "administrator", Source: "\x1bLua"}); err == nil {
 		t.Fatal("accepted compiled bytecode as source text")

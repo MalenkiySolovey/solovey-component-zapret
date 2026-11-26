@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -39,7 +40,7 @@ func TestCatalogRawRevisionAndTransfer(t *testing.T) {
 	}
 }
 
-func TestCatalogCapacityFollowsStoredBytesNotRecordCount(t *testing.T) {
+func TestInactiveCatalogExceedsFormerSerializedLimit(t *testing.T) {
 	raw := "--filter-tcp=443"
 	record, err := SealDraft(Draft{ID: "fixture", Name: "Unused example", Raw: &raw})
 	if err != nil {
@@ -56,8 +57,8 @@ func TestCatalogCapacityFollowsStoredBytesNotRecordCount(t *testing.T) {
 		t.Fatalf("small records should fit: %v", err)
 	}
 
-	raw += strings.Repeat(" ", MaxNativeBytes-len(raw))
-	for i := range MaxCatalogBytes/MaxNativeBytes + 1 {
+	raw += "\n# " + strings.Repeat("x", 12<<10) + "\n"
+	for i := range 24 {
 		id := fmt.Sprintf("long-%d", i)
 		r, err := SealDraft(Draft{ID: id, Name: "Long but valid", Raw: &raw})
 		if err != nil {
@@ -65,23 +66,28 @@ func TestCatalogCapacityFollowsStoredBytesNotRecordCount(t *testing.T) {
 		}
 		c.Records[id] = r
 	}
-	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "storage limit") {
-		t.Fatalf("oversized catalog did not report its byte budget: %v", err)
+	data, err := json.Marshal(c)
+	if err != nil || len(data) <= 256<<10 || c.Validate() != nil {
+		t.Fatalf("valid inactive records beyond the old limit were lost: %d bytes, %v", len(data), err)
 	}
 }
 
-func TestAuthoringUsesTheSealedDefinitionBudget(t *testing.T) {
+func TestAuthoringAndCompilationBeyondFormerDefinitionLimit(t *testing.T) {
 	raw := "--filter-tcp=100-163" + strings.Repeat(" --new --filter-tcp=100-163", 40)
 	draft := Draft{ID: "fixture", Name: "Ranges", Raw: &raw}
-	if _, err := SealDraft(draft); err == nil || !strings.Contains(err.Error(), "installation limit") {
-		t.Fatalf("definition expansion did not report its install budget: %v", err)
-	}
-	value, err := ParseNative(draft.ID, raw)
+	r, err := SealDraft(draft)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := Record{Name: draft.Name, Raw: raw, Definition: value}
+	data, err := json.Marshal(r.Definition)
+	if err != nil || len(data) <= 8<<10 {
+		t.Fatalf("sealed fixture did not exceed 8 KiB: %d bytes, %v", len(data), err)
+	}
 	if err := r.Validate(); err != nil {
 		t.Fatalf("a stored definition did not remain readable: %v", err)
+	}
+	args, err := r.Definition.Compile("/engine", 42, 0x10000, 0x40000000)
+	if err != nil || strings.Count(strings.Join(args, "\n"), "--filter-tcp=100-163") != 41 {
+		t.Fatalf("selected native profiles were not compiled: %v", err)
 	}
 }
