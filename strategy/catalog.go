@@ -35,6 +35,9 @@ type Record struct {
 // VisualEditable reports whether the visual editor can regenerate the source
 // without losing native-only fields, comments or layout.
 func (r Record) VisualEditable() bool {
+	if len(r.Definition.ManagedLua) != 0 {
+		return false
+	}
 	parsed, err := parseNative(r.Definition.ID, r.Raw)
 	if err != nil {
 		return false
@@ -50,20 +53,23 @@ func (r Record) VisualEditable() bool {
 }
 
 type Catalog struct {
-	Schema     string               `json:"schema"`
-	Records    map[string]Record    `json:"records"`
-	Lists      map[string]NamedList `json:"lists,omitempty"`
-	BlobAssets map[string]string    `json:"blobAssets,omitempty"`
-	LuaDrafts  map[string]LuaDraft  `json:"luaDrafts,omitempty"`
+	Schema       string               `json:"schema"`
+	Records      map[string]Record    `json:"records"`
+	Lists        map[string]NamedList `json:"lists,omitempty"`
+	BlobAssets   map[string]string    `json:"blobAssets,omitempty"`
+	LuaDrafts    map[string]LuaDraft  `json:"luaDrafts,omitempty"`
+	LuaRevisions map[string]LuaDraft  `json:"luaRevisions,omitempty"`
 }
 
 type Draft struct {
-	ID       string    `json:"id"`
-	Name     string    `json:"name"`
-	Raw      *string   `json:"raw,omitempty"`
-	Profiles []Profile `json:"profiles,omitempty"`
-	ListRefs ListRefs  `json:"listRefs,omitempty"`
-	origin   *PresetOrigin
+	ID         string         `json:"id"`
+	Name       string         `json:"name"`
+	Raw        *string        `json:"raw,omitempty"`
+	Profiles   []Profile      `json:"profiles,omitempty"`
+	ListRefs   ListRefs       `json:"listRefs,omitempty"`
+	ManagedLua []LuaReference `json:"managedLua,omitempty"`
+	origin     *PresetOrigin
+	luaSources map[string]LuaDraft
 }
 
 // Transfer binds the strategy to the immutable engine and assets. Referenced
@@ -77,6 +83,7 @@ type Transfer struct {
 	Strategy     Record               `json:"strategy"`
 	Lists        map[string]NamedList `json:"lists,omitempty"`
 	BlobAssets   map[string]string    `json:"blobAssets,omitempty"`
+	LuaSources   map[string]LuaDraft  `json:"luaSources,omitempty"`
 }
 
 func SealDraft(d Draft) (Record, error) { return (Catalog{}).SealDraft(d) }
@@ -107,7 +114,7 @@ func (c Catalog) sealDraft(d Draft) (Record, error) {
 		}
 		raw = *d.Raw
 	} else {
-		compiled := Strategy{Schema: Schema, ID: d.ID, Profiles: d.Profiles, Assets: nativeAssets(d.Profiles)}
+		compiled := Strategy{Schema: Schema, ID: d.ID, Profiles: d.Profiles, Assets: nativeAssets(d.Profiles), ManagedLua: d.ManagedLua}
 		compiled, err := c.resolveBlobs(compiled)
 		if err != nil {
 			return Record{}, err
@@ -117,7 +124,10 @@ func (c Catalog) sealDraft(d Draft) (Record, error) {
 			return Record{}, err
 		}
 	}
-	definition, err := parseNative(d.ID, raw)
+	if _, err := c.resolveLua(d.ManagedLua, false); err != nil {
+		return Record{}, err
+	}
+	definition, err := parseNativeWithLua(d.ID, raw, d.ManagedLua)
 	if err != nil {
 		return Record{}, err
 	}
@@ -147,7 +157,7 @@ func (c Catalog) validateRecord(r Record) error {
 	}
 	// Keep previously stored, oversized definitions readable. New drafts
 	// must fit the broker frame before they can be saved or imported.
-	checked, err := c.sealDraft(Draft{ID: r.Definition.ID, Name: r.Name, Raw: &r.Raw, ListRefs: r.ListRefs})
+	checked, err := c.sealDraft(Draft{ID: r.Definition.ID, Name: r.Name, Raw: &r.Raw, ListRefs: r.ListRefs, ManagedLua: r.Definition.ManagedLua})
 	if err != nil {
 		return err
 	}
@@ -178,7 +188,7 @@ func (t Transfer) Import() (Draft, error) {
 			return Draft{}, errors.New("strategy blob does not match its pinned native action")
 		}
 	}
-	c := Catalog{Lists: t.Lists, BlobAssets: t.BlobAssets}
+	c := Catalog{Lists: t.Lists, BlobAssets: t.BlobAssets, LuaRevisions: t.LuaSources}
 	if err := c.validateLists(); err != nil {
 		return Draft{}, err
 	}
@@ -194,7 +204,28 @@ func (t Transfer) Import() (Draft, error) {
 	if len(t.BlobAssets) != len(t.Strategy.Definition.BlobData) {
 		return Draft{}, errors.New("transfer includes unused native blobs")
 	}
-	return Draft{ID: t.Strategy.Definition.ID, Name: t.Strategy.Name, Raw: &t.Strategy.Raw, ListRefs: t.Strategy.ListRefs, origin: t.Strategy.Origin}, nil
+	refs := t.Strategy.Definition.ManagedLua
+	if len(t.LuaSources) != len(refs) {
+		return Draft{}, errors.New("transfer includes unused managed Lua sources")
+	}
+	draft := Draft{ID: t.Strategy.Definition.ID, Name: t.Strategy.Name, Raw: &t.Strategy.Raw, ListRefs: t.Strategy.ListRefs, origin: t.Strategy.Origin}
+	if len(refs) != 0 {
+		draft.luaSources = make(map[string]LuaDraft, len(refs))
+		for _, ref := range refs {
+			source := t.LuaSources[ref.key()]
+			// A local author's identity in a transfer is provenance, not a local grant.
+			if source.Origin == "administrator" {
+				source.Imported = true
+				if source.SourceRef == "" {
+					source.SourceRef = "Imported from a strategy package; original source reference was not supplied"
+				}
+			}
+			selection := LuaReference{ID: ref.ID, Revision: source.Revision()}
+			draft.ManagedLua = append(draft.ManagedLua, selection)
+			draft.luaSources[selection.key()] = source
+		}
+	}
+	return draft, nil
 }
 
 func (c Catalog) Validate() error {
@@ -213,6 +244,12 @@ func (c Catalog) Validate() error {
 	for id, draft := range c.LuaDrafts {
 		if err := draft.validate(id); err != nil {
 			return fmt.Errorf("Lua draft %q: %w", id, err)
+		}
+	}
+	for key, draft := range c.LuaRevisions {
+		id, revision, _ := strings.Cut(key, "/")
+		if !luaRevision.MatchString(revision) || draft.Revision() != revision || draft.validate(id) != nil {
+			return errors.New("invalid stored managed Lua revision")
 		}
 	}
 	for id, record := range c.Records {

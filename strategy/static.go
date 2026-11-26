@@ -68,6 +68,7 @@ type Profile struct {
 	OutRange    string                `json:"outRange,omitempty"` // Outgoing filter for a single split, QUIC or pass action.
 	L7Filter    string                `json:"l7Filter,omitempty"` // Independent L7 filter on a passive profile.
 	Pass        bool                  `json:"pass,omitempty"`     // The original engine's explicit no-op Lua action.
+	LuaActions  []LuaAction           `json:"luaActions,omitempty"`
 }
 
 type Strategy struct {
@@ -78,6 +79,7 @@ type Strategy struct {
 	Assets      []AssetRef        `json:"assets,omitempty"`
 	Profiles    []Profile         `json:"profiles"` // selection order is significant
 	BlobData    map[string]string `json:"blobData,omitempty"`
+	ManagedLua  []LuaReference    `json:"managedLua,omitempty"`
 }
 
 type Scope struct {
@@ -104,9 +106,14 @@ func Seal(value Strategy) (Strategy, error) {
 	value.Assets = slices.Clone(value.Assets)
 	value.Profiles = slices.Clone(value.Profiles)
 	value.BlobData = maps.Clone(value.BlobData)
+	value.ManagedLua = slices.Clone(value.ManagedLua)
+	if !validLuaReferences(value.ManagedLua) {
+		return Strategy{}, fmt.Errorf("%w: invalid managed Lua selection", ErrInvalidStrategy)
+	}
 	seen := map[string]bool{}
 	listBytes := maxNativeListBytes
 	needsReturn := false
+	usesManagedLua := false
 	for i, profile := range value.Profiles {
 		if !outbounds.ValidZapretStrategyRef(profile.ID) || seen[profile.ID] || !hasPorts(profile.Ports, profile.PortRanges) ||
 			(profile.Protocol != intent.PacketProtocolTCP && profile.Protocol != intent.PacketProtocolUDP) ||
@@ -141,10 +148,15 @@ func Seal(value Strategy) (Strategy, error) {
 			needsReturn = true
 		}
 		profile.HTTPActions = slices.Clone(profile.HTTPActions)
+		profile.LuaActions = slices.Clone(profile.LuaActions)
+		usesManagedLua = usesManagedLua || len(profile.LuaActions) != 0
 		if err := profile.sealOutRanges(); err != nil {
 			return Strategy{}, fmt.Errorf("%w: profile %q: %w", ErrInvalidStrategy, profile.ID, err)
 		}
 		value.Profiles[i] = profile
+	}
+	if usesManagedLua != (len(value.ManagedLua) != 0) {
+		return Strategy{}, fmt.Errorf("%w: managed Lua actions and selected dependencies are both required", ErrInvalidStrategy)
 	}
 	wantAssets := nativeAssets(value.Profiles)
 	// Older sealed passive profiles could carry the two unused base assets.
@@ -181,7 +193,7 @@ func (p Profile) portsOn(protocol intent.PacketProtocol) ([]uint16, []intent.Por
 }
 
 func (p Profile) hasAction() bool {
-	return p.SplitAt != 0 || p.QUICRepeats != 0 || p.Circular != nil || len(p.HTTPActions) != 0 || p.Pass
+	return p.SplitAt != 0 || p.QUICRepeats != 0 || p.Circular != nil || len(p.HTTPActions) != 0 || p.Pass || len(p.LuaActions) != 0
 }
 
 func nativeAssets(profiles []Profile) []AssetRef {
@@ -202,10 +214,13 @@ func (p Profile) validAction() bool {
 	if p.QUICBlobRef != "" && (p.QUICRepeats == 0 || !outbounds.ValidZapretStrategyRef(p.QUICBlobRef)) {
 		return false
 	}
-	if p.L7Filter != "" && (p.hasAction() && !p.Pass || !validNativeSelector(p.L7Filter, nativeL7Names)) {
+	if p.L7Filter != "" && (p.hasAction() && !p.Pass && len(p.LuaActions) == 0 || !validNativeSelector(p.L7Filter, nativeL7Names)) {
 		return false
 	}
 	switch {
+	case len(p.LuaActions) != 0:
+		return p.Payload == "" && p.OutRange == "" && !p.Pass && p.SplitAt == 0 && p.QUICRepeats == 0 &&
+			p.Circular == nil && len(p.HTTPActions) == 0 && !slices.ContainsFunc(p.LuaActions, func(a LuaAction) bool { return !a.valid() })
 	case p.Pass:
 		return p.SplitAt == 0 && p.QUICRepeats == 0 && p.Circular == nil && len(p.HTTPActions) == 0 &&
 			(p.Payload == "" || validNativeSelector(string(p.Payload), nativePayloadNames))
@@ -351,6 +366,12 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 }
 
 func compileBindingsWithin(budget engineArgBudget, engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy, trace, returnPath bool) ([]string, *NativeTrace, error) {
+	return compileBindingsWithLuaWithin(budget, engineRoot, queue, loopMark, bindings, trace, returnPath, nil)
+}
+
+func compileBindingsWithLuaWithin(budget engineArgBudget, engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy,
+	trace, returnPath bool, lua *luaBindings,
+) ([]string, *NativeTrace, error) {
 	if queue == 0 || loopMark == 0 || loopMark&(loopMark-1) != 0 || len(bindings) == 0 ||
 		!path.IsAbs(engineRoot) || path.Clean(engineRoot) != engineRoot || len(engineRoot) > 512 || strings.ContainsAny(engineRoot, "\x00\r\n") {
 		return nil, nil, errors.New("invalid Zapret engine root or Network Planner allocation")
@@ -374,6 +395,9 @@ func compileBindingsWithin(budget engineArgBudget, engineRoot string, queue uint
 		if sealed.NeedsReturn && !returnPath {
 			return nil, nil, errReturnObservationUnavailable
 		}
+		if len(sealed.ManagedLua) != 0 && lua == nil {
+			return nil, nil, errors.New("managed Zapret Lua requires an explicitly delegated installed Host")
+		}
 		minimum += len(sealed.Profiles) * minimumEngineProfileBytes
 		if minimum > budget.total {
 			return nil, nil, budget.exceedsTotal(minimum)
@@ -392,6 +416,9 @@ func compileBindingsWithin(budget engineArgBudget, engineRoot string, queue uint
 	}
 	if trace {
 		args = append(args, "--lua-init="+nativeTraceLua)
+	}
+	if lua != nil {
+		args = append(args, "--lua-init=@"+lua.file)
 	}
 	used := 0
 	if err := budget.charge(&used, args); err != nil {
@@ -415,7 +442,11 @@ func compileBindingsWithin(budget engineArgBudget, engineRoot string, queue uint
 	}
 	for i, sealed := range verified {
 		before := len(args)
-		args = appendProfiles(args, sealed, bindings[i].QueueMark, i, len(bindings) > 1, names, trace)
+		var entries []string
+		if lua != nil {
+			entries = lua.entries[i]
+		}
+		args = appendProfiles(args, sealed, bindings[i].QueueMark, i, len(bindings) > 1, names, trace, entries)
 		if err := budget.charge(&used, args[before:]); err != nil {
 			return nil, nil, err
 		}
@@ -427,7 +458,7 @@ func compileBindingsWithin(budget engineArgBudget, engineRoot string, queue uint
 	return args, observations, nil
 }
 
-func appendProfiles(args []string, value Strategy, mark uint32, binding int, groupNames bool, names map[string]string, trace bool) []string {
+func appendProfiles(args []string, value Strategy, mark uint32, binding int, groupNames bool, names map[string]string, trace bool, entries []string) []string {
 	for i, profile := range value.Profiles {
 		name := profile.ID
 		if groupNames {
@@ -450,6 +481,11 @@ func appendProfiles(args []string, value Strategy, mark uint32, binding int, gro
 		var observation string
 		if trace {
 			observation = fmt.Sprintf("--lua-desync=solovey_profile_match:slot=%d/%d", binding+1, i+1)
+		}
+		if count := len(profile.LuaActions); count != 0 {
+			args = profile.appendManagedLuaActions(args, entries[:count], observation)
+			entries = entries[count:]
+			continue
 		}
 		args = profile.appendActions(args, names[value.BlobData[profile.QUICBlobRef]], observation)
 	}

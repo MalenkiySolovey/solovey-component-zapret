@@ -213,6 +213,38 @@
           <template v-if="mode === 'raw'">
             <v-alert v-if="rawLocked" type="info" variant="tonal" density="compact" class="mb-3">{{ t('zapretCatalog.nativeOnlyHelp') }}</v-alert>
             <v-textarea v-model="raw" class="native-source" :label="t('zapretCatalog.raw')" spellcheck="false" maxlength="8192" rows="9" :disabled="busy" />
+            <details class="mb-3" :open="!!selectedLua.length">
+              <summary>{{ t('zapretCatalog.lua.dependencies') }}</summary>
+              <div v-if="selectedLua.length" class="mt-2">
+                <v-alert type="warning" variant="tonal" density="compact" class="mb-2">{{ t('zapretCatalog.lua.delegation') }}</v-alert>
+                <div v-for="(selection, index) in selectedLua" :key="selection.id" class="d-flex flex-wrap align-center justify-space-between ga-1 border-b py-1">
+                  <div class="text-break">
+                    <strong>{{ selection.id }}</strong> <code :title="selection.revision">{{ selection.revision.slice(0, 12) }}</code>
+                    <div v-if="luaOrigin(selection)" class="text-caption">
+                      {{ t(`zapretCatalog.lua.origins.${luaOrigin(selection)}`) }}<template v-if="luaMetadata(selection)?.sourceRef"> · {{ luaMetadata(selection)?.sourceRef }}</template>
+                      <template v-if="luaMetadata(selection)?.imported"> · {{ t('zapretCatalog.lua.transferred') }}</template>
+                    </div>
+                  </div>
+                  <div>
+                    <v-btn icon="mdi-chevron-up" size="small" variant="text" :disabled="index === 0" :title="t('zapretCatalog.lua.moveUp')" :aria-label="t('zapretCatalog.lua.moveUp')" @click="moveLua(index, -1)" />
+                    <v-btn icon="mdi-chevron-down" size="small" variant="text" :disabled="index === selectedLua.length - 1" :title="t('zapretCatalog.lua.moveDown')" :aria-label="t('zapretCatalog.lua.moveDown')" @click="moveLua(index, 1)" />
+                    <v-btn icon="mdi-close" size="small" variant="text" :title="t('zapretCatalog.lua.remove')" :aria-label="t('zapretCatalog.lua.remove')" @click="selectedLua.splice(index, 1)" />
+                  </div>
+                  <details v-if="luaMetadata(selection)" class="w-100 text-caption">
+                    <summary>{{ t('zapretCatalog.lua.source') }}</summary>
+                    <pre class="lua-source-preview">{{ luaMetadata(selection)?.source }}</pre>
+                  </details>
+                  <v-checkbox v-if="selection.approveImported || luaRequiresApproval(selection)"
+                    :model-value="selection.approveImported === true" :label="t('zapretCatalog.lua.approve')" density="compact" hide-details class="w-100"
+                    @update:model-value="selection.approveImported = $event === true" />
+                </div>
+              </div>
+              <v-btn v-if="!luaSources" class="mt-2" prepend-icon="mdi-script-text-outline" variant="tonal" size="small" :disabled="busy"
+                @click="loadLuaChoices">{{ t('zapretCatalog.lua.loadRevisions') }}</v-btn>
+              <v-select v-else-if="luaChoices.length" class="mt-2" :model-value="null" :items="luaChoices" :label="t('zapretCatalog.lua.selectRevision')"
+                density="compact" hide-details @update:model-value="selectLua" />
+              <p v-else class="text-caption mt-2 mb-0">{{ t('zapretCatalog.lua.noAdditionalRevisions') }}</p>
+            </details>
             <details v-if="rawListProfiles.length && (namedLists.length || Object.keys(rawRefs).length)" class="mb-3" :open="!!Object.keys(rawRefs).length">
               <summary>{{ t('zapretCatalog.sharedLists') }}</summary>
               <div v-for="id in rawListProfiles" :key="id" class="mt-2">
@@ -346,7 +378,7 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vu
 import LuaDrafts from './LuaDrafts.vue'
 import PresetReview from './PresetReview.vue'
 import PresetOriginDetails from './PresetOriginDetails.vue'
-import { catalogError, diagnose, draftToSave, exportRecord, loadCatalog, portText, presetBytes, preview, saveCatalog, type CatalogView, type ExportFormat, type HTTPAction, type ListKind, type ListRefs, type NamedList, type NativeListField, type PortInterval, type PresetTemplate, type Profile, type ProfileListRefs, type StrategyRecord, type StrategyReference } from './catalog'
+import { catalogError, diagnose, draftToSave, exportRecord, loadCatalog, loadLuaDrafts, portText, presetBytes, preview, saveCatalog, type CatalogView, type ExportFormat, type HTTPAction, type ListKind, type ListRefs, type LuaDraftView, type LuaReference, type NamedList, type NativeListField, type PortInterval, type PresetTemplate, type Profile, type ProfileListRefs, type StrategyRecord, type StrategyReference } from './catalog'
 
 const { t, te } = useI18n()
 const route = useRoute()
@@ -398,6 +430,19 @@ const deletingAsset = ref<{ id: string; blob: boolean }>()
 const deleteAssetLabel = computed(() => t(deletingAsset.value?.blob ? 'zapretCatalog.deleteBlob' : 'zapretCatalog.deleteList'))
 const name = ref('')
 const raw = ref('')
+const selectedLua = ref<LuaReference[]>([])
+const originalLua = ref('')
+const luaSources = ref<LuaDraftView>()
+const luaMetadata = (selection: LuaReference) => luaSources.value?.draftRevisions?.[selection.id] === selection.revision
+  ? luaSources.value.drafts?.[selection.id] : luaSources.value?.revisionSources?.[`${selection.id}/${selection.revision}`]
+const luaOrigin = (selection: LuaReference) => luaMetadata(selection)?.origin
+const luaRequiresApproval = (selection: LuaReference) => {
+  const source = luaMetadata(selection)
+  return source && (source.imported || source.origin !== 'administrator')
+}
+const luaChoices = computed(() => Object.entries(luaSources.value?.draftRevisions ?? {})
+  .filter(([id, revision]) => !selectedLua.value.some(selection => selection.id === id && selection.revision === revision))
+  .map(([id, revision]) => ({ title: `${id} · ${revision.slice(0, 12)}`, value: id })))
 const rawRefs = ref<ListRefs>({})
 const rawProfileIDs = ref<string[]>([])
 const rawRefsChanged = ref(false)
@@ -467,7 +512,7 @@ const httpActions = computed(() => [
 ])
 const refsFor = (id: string) => view.value?.references.filter(ref => ref.strategyRef === id) ?? []
 const isNativeOnly = (record: StrategyRecord) => view.value?.nativeOnly?.includes(record.definition.id) ?? false
-const hasManagedDependencies = (record: StrategyRecord) => !!Object.keys(record.listRefs ?? {}).length || record.definition.profiles.some(profile => !!profile.quicBlobRef)
+const hasManagedDependencies = (record: StrategyRecord) => !!Object.keys(record.listRefs ?? {}).length || !!record.definition.managedLua?.length || record.definition.profiles.some(profile => !!profile.quicBlobRef)
 const transports = (record: StrategyRecord) => [...new Set(record.definition.profiles.flatMap(profileTransports))].map(protocol => protocol.toUpperCase()).join(' / ')
 function recordStatus(record: StrategyRecord) {
   const states = new Set(refsFor(record.definition.id).map(ref => ref.state))
@@ -486,14 +531,33 @@ async function run(action: () => Promise<void>, inDialog = false) {
   finally { busy.value = false }
 }
 const refresh = () => run(async () => { view.value = await loadCatalog(); diagnostic.value = undefined; copiedEvidence.value = false })
-const dirty = computed(() => editing.value && (visualChanged.value || rawRefsChanged.value || name.value !== originalName.value || raw.value !== originalRaw.value))
+const loadLuaChoices = () => run(async () => {
+  const response = await loadLuaDrafts()
+  if (response.revision !== editorRevision.value) throw new Error(t('zapretCatalog.lua.catalogChanged'))
+  luaSources.value = response
+}, true)
+function selectLua(id: string | null) {
+  const revision = id && luaSources.value?.draftRevisions?.[id]
+  if (!id || !revision) return
+  const index = selectedLua.value.findIndex(item => item.id === id)
+  if (index < 0) selectedLua.value.push({ id, revision })
+  else selectedLua.value.splice(index, 1, { id, revision })
+}
+function moveLua(index: number, step: number) {
+  const selection = selectedLua.value[index]
+  if (selection) {
+    selectedLua.value.splice(index, 1)
+    selectedLua.value.splice(index + step, 0, selection)
+  }
+}
+const dirty = computed(() => editing.value && (visualChanged.value || rawRefsChanged.value || name.value !== originalName.value || raw.value !== originalRaw.value || JSON.stringify(selectedLua.value) !== originalLua.value))
 const confirmDiscard = () => !dirty.value || window.confirm(t('zapretCatalog.discardDraft'))
 const warnUnload = (event: BeforeUnloadEvent) => { if (dirty.value) event.preventDefault() }
 onMounted(() => { window.addEventListener('beforeunload', warnUnload); void refresh() })
 onUnmounted(() => window.removeEventListener('beforeunload', warnUnload))
 onBeforeRouteLeave(confirmDiscard)
 onBeforeRouteUpdate((to, from) => to.params.hostId === from.params.hostId || confirmDiscard())
-watch([name, raw, rows, rawRefs], () => { effective.value = undefined }, { deep: true })
+watch([name, raw, rows, rawRefs, selectedLua], () => { effective.value = undefined }, { deep: true })
 function listText(lists: Profile['lists'] = {}): Row['lists'] {
   return { hostList: lists.hostList?.join('\n') ?? '', hostListExclude: lists.hostListExclude?.join('\n') ?? '',
     ipSet: lists.ipSet?.join('\n') ?? '', ipSetExclude: lists.ipSetExclude?.join('\n') ?? '' }
@@ -604,6 +668,9 @@ function openDraft(record?: StrategyRecord, clone = false) {
   raw.value = record?.raw ?? ''
   originalName.value = name.value
   originalRaw.value = raw.value
+  selectedLua.value = (record?.definition.managedLua ?? []).map(selection => ({ ...selection }))
+  originalLua.value = JSON.stringify(selectedLua.value)
+  luaSources.value = undefined
   rawLocked.value = !!record && isNativeOnly(record)
   mode.value = rawLocked.value ? 'raw' : 'visual'
   dialogError.value = ''
@@ -623,7 +690,7 @@ function cancelDraft() {
   editing.value = false
 }
 function draft() {
-  if (mode.value === 'raw' || !visualChanged.value && raw.value) return draftToSave(name.value.trim(), raw.value, [], false, rawRefs.value)
+  if (mode.value === 'raw' || !visualChanged.value && raw.value) return draftToSave(name.value.trim(), raw.value, [], false, rawRefs.value, selectedLua.value)
   const profiles = rows.value.map<Profile>(row => {
     const lists: NonNullable<Profile['lists']> = {}
     for (const field of listFields) {
@@ -673,6 +740,7 @@ async function switchMode(next: 'visual' | 'raw') {
 }
 const save = () => run(async () => {
   const id = activeID.value
+  if (affected.value.length && selectedLua.value.length && dirty.value && !window.confirm(t('zapretCatalog.lua.applyConfirmation'))) return
   view.value = await saveCatalog({ action: id ? 'edit' : 'create', ...(id ? { id } : {}), expectedRevision: editorRevision.value, draft: draft() })
   section.value = 'strategies'
   collection.value = 'saved'
@@ -758,6 +826,7 @@ function presetSaved(next: CatalogView) {
 .template-title { white-space: normal; overflow-wrap: anywhere; font-size: 1rem; }
 .record-actions { display: flex; flex-wrap: wrap; }
 .record-meta { overflow-wrap: anywhere; }
+.lua-source-preview { max-height: 15rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .runtime-name { min-width: 6.5rem; }
 .runtime-state { max-width: 100%; }
 .editor-body { min-inline-size: 0; }

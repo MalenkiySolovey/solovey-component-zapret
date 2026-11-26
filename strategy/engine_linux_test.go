@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/MalenkiySolovey/solovey-host/network/intent"
+	"golang.org/x/sys/unix"
 )
 
 func TestPinnedEngineValidatesProfiles(t *testing.T) {
@@ -122,6 +123,73 @@ func validatePresetEngine(t *testing.T, root string, input PresetInput) {
 		t.Fatal(err)
 	}
 	validateEngineArgs(t, root, argv)
+}
+
+func TestPinnedEngineRunsManagedLua(t *testing.T) {
+	root := os.Getenv("SOLOVEY_TEST_ENGINE_ROOT")
+	if root == "" {
+		t.Skip("requires independently built nfqws2 engine input")
+	}
+	dependency := "\xef\xbb\xbf#!/usr/bin/env lua\r\nreturn { verdict = function() return VERDICT_PASS end }"
+	source := `
+local dep = require("example")
+assert(_G == _ENV and getmetatable(_G) == false)
+assert(io == nil and load == nil and loadfile == nil and dofile == nil and package == nil and debug == nil)
+assert(os.execute == nil and os.getenv == nil and os.remove == nil)
+assert(rawsend == nil and rawsend_dissect == nil and conntrack_feed == nil and stat == nil)
+assert(timer_set == nil and get_source_ip == nil and getmetatable("") == nil)
+assert(not pcall(require, "unselected"))
+function observe(ctx, desync)
+    assert(desync.track.private == nil)
+    desync.track.seen = true
+    assert(u16(bu16(80)) == 80)
+    return dep.verdict()
+end
+function invalid(ctx, desync) error("controlled action failure") end`
+	modules := []LuaModule{
+		{"example", LuaDraft{Origin: "external", SourceRef: "test fixture", Source: dependency}, LuaSourceDigest(dependency), LuaSourceDigest(dependency)},
+		{"operator", LuaDraft{Origin: "administrator", Source: source}, LuaSourceDigest(source), ""},
+	}
+	program, entries, err := CompileManagedLua(0, modules, []string{"observe", "invalid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The test uses the original Lua engine without wiring a live packet hook.
+	// The trusted test tail calls the generated callbacks with inert data.
+	program += `
+local packet = {track = {private = function() end}}
+assert(solovey_managed_0_0(nil, packet) == VERDICT_PASS)
+assert(packet.track.seen == nil)
+assert(solovey_managed_0_1(nil, packet) == VERDICT_DROP)
+assert(not pcall(solovey_bind, "invalidtest", "missing_function"))
+print("MANAGED_LUA_CALLBACKS_VERIFIED")
+os.exit(0) -- The no-intercept engine otherwise waits in its timer loop.
+`
+	fd, err := unix.MemfdCreate("solovey-test-zapret-lua", unix.MFD_CLOEXEC|unix.MFD_ALLOW_SEALING)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := os.NewFile(uintptr(fd), "solovey-test-zapret-lua")
+	defer file.Close()
+	if _, err := file.WriteString(program); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Chmod(0o444); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := unix.FcntlInt(file.Fd(), unix.F_ADD_SEALS, unix.F_SEAL_SEAL|unix.F_SEAL_SHRINK|unix.F_SEAL_GROW|unix.F_SEAL_WRITE); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, filepath.Join(root, "nfqws2"), "--intercept=0", "--uid=65534:65534", "--lua-init=@/proc/self/fd/3",
+		"--filter-tcp=443", "--lua-desync="+entries[0])
+	cmd.Dir = root
+	cmd.ExtraFiles = []*os.File{file}
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "MANAGED_LUA_CALLBACKS_VERIFIED") || !strings.Contains(string(out), "managed Lua action failed") {
+		t.Fatalf("nfqws2 managed source: %v\n%s", err, out)
+	}
 }
 
 func validateEngineArgs(t *testing.T, root string, argv []string) {

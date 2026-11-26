@@ -48,7 +48,7 @@
           <v-text-field v-model="editor.id" :label="t('zapretCatalog.lua.id')" :readonly="editor.mode === 'edit'" :disabled="busy" maxlength="64" />
           <v-select v-model="editor.draft.origin" :items="originChoices" :label="t('zapretCatalog.lua.origin')" :disabled="busy" />
           <v-text-field v-model="editor.draft.sourceRef" :label="t('zapretCatalog.lua.sourceRef')" :disabled="busy" maxlength="240" />
-          <v-alert v-if="editor.draft.origin !== 'administrator'" type="warning" variant="tonal" density="compact" class="mb-3">
+          <v-alert v-if="editor.requiresProvenance || editor.draft.origin !== 'administrator'" type="warning" variant="tonal" density="compact" class="mb-3">
             {{ t('zapretCatalog.lua.external') }}
           </v-alert>
           <v-textarea :model-value="editor.draft.source" :label="t('zapretCatalog.lua.source')" :disabled="busy"
@@ -94,7 +94,7 @@ const snapshot = ref<LuaDraftView>()
 const accessMessage = ref('')
 const dialogError = ref('')
 const busy = ref(false)
-const editor = ref<{ mode: 'create' | 'edit' | 'import'; id: string; draft: LuaDraft; revision: string; file?: string }>()
+const editor = ref<{ mode: 'create' | 'edit' | 'import'; id: string; draft: LuaDraft; revision: string; requiresProvenance: boolean; file?: string }>()
 const deleting = ref<{ id: string; revision: string }>()
 const fileField = ref<HTMLInputElement>()
 const drafts = computed(() => Object.entries(snapshot.value?.drafts ?? {}).sort(([a], [b]) => a.localeCompare(b)))
@@ -105,7 +105,8 @@ const filteredDrafts = computed(() => {
 })
 const canSave = computed(() => {
   const form = editor.value
-  return !!form?.id.trim() && (form.mode !== 'import' || !!form.file) && (form.draft.origin === 'administrator' || !!form.draft.sourceRef?.trim())
+  return !!form?.id.trim() && (form.mode !== 'import' || !!form.file) &&
+    ((!form.requiresProvenance && form.draft.origin === 'administrator') || !!form.draft.sourceRef?.trim())
 })
 
 async function refresh() {
@@ -127,7 +128,11 @@ watch(() => props.catalogRevision, revision => {
 function openDraft(mode: 'create' | 'edit' | 'import', id = '', item?: LuaDraft) {
   if (!snapshot.value) return
   dialogError.value = ''
-  editor.value = { mode, id, revision: snapshot.value.revision, draft: item ? { ...item } : { origin: mode === 'import' ? 'external' : 'administrator', source: '' } }
+  editor.value = {
+    mode, id, revision: snapshot.value.revision,
+    draft: item ? { ...item } : { origin: mode === 'import' ? 'external' : 'administrator', source: '' },
+    requiresProvenance: mode === 'import' || !!item && (item.imported === true || item.origin !== 'administrator'),
+  }
 }
 function openDelete(id: string) {
   if (!snapshot.value) return
@@ -179,7 +184,7 @@ const save = () => run(async () => {
   if (new TextEncoder().encode(form.draft.source).length > props.storageLimit) {
     throw new Error(t('zapretCatalog.importTooLarge', { max: props.storageLimit / 1024 }))
   }
-  snapshot.value = await saveLuaDraft(form.mode === 'edit' ? 'edit' : 'create', form.id.trim(), form.revision,
+  snapshot.value = await saveLuaDraft(form.mode, form.id.trim(), form.revision,
     { ...form.draft, sourceRef: form.draft.sourceRef?.trim() })
   editor.value = undefined
   emit('changed')

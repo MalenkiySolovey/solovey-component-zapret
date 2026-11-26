@@ -37,7 +37,7 @@ type PresetDependency struct {
 	Source    string `json:"source"`
 	ID        string `json:"id"`
 	Kind      string `json:"kind"`
-	State     string `json:"state"` // new, reuse, conflict, or missing
+	State     string `json:"state"` // new, reuse, conflict, missing, or needs-approval
 	CanRename bool   `json:"canRename,omitempty"`
 }
 
@@ -167,6 +167,9 @@ func (c Catalog) prepareTransferPreset(id, name string, data []byte) (Catalog, P
 	}
 	for key, data := range transfer.BlobAssets {
 		p.Dependencies = append(p.Dependencies, PresetDependency{Source: key, ID: key, Kind: "blob", State: c.blobImportState(key, data)})
+	}
+	for _, ref := range transfer.Strategy.Definition.ManagedLua {
+		p.Dependencies = append(p.Dependencies, PresetDependency{Source: ref.key(), ID: ref.ID, Kind: "lua", State: "needs-approval"})
 	}
 	slices.SortFunc(p.Dependencies, func(a, b PresetDependency) int {
 		if result := strings.Compare(a.Kind, b.Kind); result != 0 {
