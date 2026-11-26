@@ -2,6 +2,7 @@ package strategy
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -77,11 +78,18 @@ func TestNativeTraceScalesWithCompiledBindingBudget(t *testing.T) {
 	}
 
 	// Stay below the minimum-byte precheck but exceed actual argv bytes.
-	large := make([]MarkedStrategy, engineArgumentBudget/minimumEngineProfileBytes)
+	constrained := engineArgBudget{total: linuxArgFloor - engineLauncherReserve, maxString: linuxArgFloor}
+	large := make([]MarkedStrategy, constrained.total/minimumEngineProfileBytes)
 	for i := range large {
 		large[i] = MarkedStrategy{Strategy: value, QueueMark: uint32(i + 1)}
 	}
-	if args, trace, err := CompileBindingsWithNativeTrace("/engine", 400, loopMark, large); !errors.Is(err, ErrEngineArgumentBudget) || args != nil || trace != nil {
+	if args, trace, err := compileBindingsWithin(constrained, "/engine", 400, loopMark, large, true, false); !errors.Is(err, ErrEngineArgumentBudget) || args != nil || trace != nil {
 		t.Fatalf("oversize compiled generation was not rejected atomically: %v", err)
+	}
+	room := engineArgBudget{total: (2 << 20) - engineLauncherReserve, maxString: linuxArgFloor}
+	args, trace, err = compileBindingsWithin(room, "/engine", 400, loopMark, large, true, false)
+	lastSlot := fmt.Sprintf("--lua-desync=solovey_profile_match:slot=%d/1", len(large))
+	if err != nil || trace == nil || !slices.Contains(args, lastSlot) {
+		t.Fatalf("the same definitions must compile within the larger budget: %v", err)
 	}
 }

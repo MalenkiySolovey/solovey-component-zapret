@@ -343,12 +343,20 @@ func CompileBindingsForReturnPath(engineRoot string, queue uint16, loopMark uint
 }
 
 func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy, trace, returnPath bool) ([]string, *NativeTrace, error) {
+	budget, err := currentEngineArgBudget()
+	if err != nil {
+		return nil, nil, err
+	}
+	return compileBindingsWithin(budget, engineRoot, queue, loopMark, bindings, trace, returnPath)
+}
+
+func compileBindingsWithin(budget engineArgBudget, engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy, trace, returnPath bool) ([]string, *NativeTrace, error) {
 	if queue == 0 || loopMark == 0 || loopMark&(loopMark-1) != 0 || len(bindings) == 0 ||
 		!path.IsAbs(engineRoot) || path.Clean(engineRoot) != engineRoot || len(engineRoot) > 512 || strings.ContainsAny(engineRoot, "\x00\r\n") {
 		return nil, nil, errors.New("invalid Zapret engine root or Network Planner allocation")
 	}
-	if len(bindings) > engineArgumentBudget/minimumEngineProfileBytes {
-		return nil, nil, argumentBudgetError((engineArgumentBudget/minimumEngineProfileBytes + 1) * minimumEngineProfileBytes)
+	if len(bindings) > budget.total/minimumEngineProfileBytes {
+		return nil, nil, budget.exceedsTotal((budget.total/minimumEngineProfileBytes + 1) * minimumEngineProfileBytes)
 	}
 	verified := make([]Strategy, len(bindings))
 	seen := make(map[uint32]bool, len(bindings))
@@ -367,8 +375,8 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 			return nil, nil, errReturnObservationUnavailable
 		}
 		minimum += len(sealed.Profiles) * minimumEngineProfileBytes
-		if minimum > engineArgumentBudget {
-			return nil, nil, argumentBudgetError(minimum)
+		if minimum > budget.total {
+			return nil, nil, budget.exceedsTotal(minimum)
 		}
 		needsCircular = needsCircular || sealed.NeedsReturn
 		verified[i] = sealed
@@ -386,7 +394,7 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 		args = append(args, "--lua-init="+nativeTraceLua)
 	}
 	used := 0
-	if err := chargeEngineArgs(&used, args); err != nil {
+	if err := budget.charge(&used, args); err != nil {
 		return nil, nil, err
 	}
 	// Binary data is serialized as hex only. Engine-global Lua variables use
@@ -399,7 +407,7 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 				name := fmt.Sprintf("solovey_blob_%d", len(names)+1)
 				names[data] = name
 				args = append(args, "--blob="+name+":0x"+data)
-				if err := chargeEngineArgs(&used, args[len(args)-1:]); err != nil {
+				if err := budget.charge(&used, args[len(args)-1:]); err != nil {
 					return nil, nil, err
 				}
 			}
@@ -408,7 +416,7 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 	for i, sealed := range verified {
 		before := len(args)
 		args = appendProfiles(args, sealed, bindings[i].QueueMark, i, len(bindings) > 1, names, trace)
-		if err := chargeEngineArgs(&used, args[before:]); err != nil {
+		if err := budget.charge(&used, args[before:]); err != nil {
 			return nil, nil, err
 		}
 	}
