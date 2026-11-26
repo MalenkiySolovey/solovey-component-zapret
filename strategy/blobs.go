@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	NamedBlobLimit      = 8        // Distinct assets in one installed Strategy, not stored assets.
-	MaxNativeBlobBytes  = 1200     // Total distinct custom blob bytes per Strategy.
+	MaxNativeBlobBytes  = 1200     // Per custom QUIC Initial blob, not a strategy-wide budget.
 	nativeBlobRefPrefix = "asset_" // Editor reference, never a runtime Lua variable.
 )
 
@@ -38,22 +37,14 @@ func (s Strategy) nativeBlobIDs() map[string]struct{} {
 
 func (s Strategy) validateBlobs() error {
 	ids := s.nativeBlobIDs()
-	if len(ids) > NamedBlobLimit {
-		return fmt.Errorf("%w: strategy references %d native blobs; installation limit is %d", ErrInvalidStrategy, len(ids), NamedBlobLimit)
-	}
 	if len(s.BlobData) != len(ids) {
 		return fmt.Errorf("%w: missing or unused native blob assets", ErrInvalidStrategy)
 	}
-	remaining := MaxNativeBlobBytes * 2
 	for id := range ids {
 		data := s.BlobData[id]
-		remaining -= len(data)
 		if canonical, err := normalizeBlob(data); err != nil || canonical != data {
 			return fmt.Errorf("%w: invalid or missing native blob %q", ErrInvalidStrategy, id)
 		}
-	}
-	if remaining < 0 {
-		return fmt.Errorf("%w: native blobs require %d bytes; installation limit is %d bytes per Strategy", ErrInvalidStrategy, MaxNativeBlobBytes-remaining/2, MaxNativeBlobBytes)
 	}
 	return nil
 }

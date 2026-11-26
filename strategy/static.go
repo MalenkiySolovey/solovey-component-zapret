@@ -163,8 +163,8 @@ func Seal(value Strategy) (Strategy, error) {
 	if err != nil {
 		return Strategy{}, ErrInvalidStrategy
 	}
-	if len(value.BlobData) != 0 && len(data)+64 > MaxDefinitionBytes {
-		return Strategy{}, fmt.Errorf("%w: native blob strategy exceeds the runtime definition budget", ErrInvalidStrategy)
+	if size := len(data) + sha256.Size*2; len(value.BlobData) != 0 && size > MaxDefinitionBytes {
+		return Strategy{}, fmt.Errorf("%w: sealed definition requires %d bytes; installation limit is %d bytes", ErrInvalidStrategy, size, MaxDefinitionBytes)
 	}
 	value.Revision = fmt.Sprintf("%x", sha256.Sum256(data))
 	return value, nil

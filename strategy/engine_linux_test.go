@@ -80,6 +80,18 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 		validatePresetEngine(t, root, PresetInput{Format: "zip", Content: presetBinaryFixture(t, "\xff\x00\x7f"),
 			DependencyIDs: []PresetDependencyID{{"blobs/fixture.bin", "portable-blob"}}})
 	})
+	t.Run("multiple-managed-blobs", func(t *testing.T) {
+		catalog, draft := namedBlobBudgetFixture(9, 140)
+		record, err := catalog.SealDraft(draft)
+		if err != nil {
+			t.Fatal(err)
+		}
+		argv, err := record.Definition.Compile(root, 401, 0x120000, 0x40000000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		validateEngineArgs(t, root, argv)
+	})
 	t.Run("zapretgui-package", func(t *testing.T) {
 		validatePresetEngine(t, root, PresetInput{Format: "zip", Content: guiPackageFixture(t, guiFixturePreset, "standalone", nil)})
 	})
