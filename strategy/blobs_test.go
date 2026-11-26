@@ -2,6 +2,7 @@ package strategy
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -112,16 +113,51 @@ func TestNativeBlobRejectsUnsafeInput(t *testing.T) {
 	}
 	c.BlobAssets = map[string]string{"fixture": strings.Repeat("ab", MaxNativeBlobBytes), "another": "00"}
 	raw := referenceRaw + " --new " + strings.Replace(referenceRaw, "asset_fixture", "asset_another", 1)
-	if _, err := c.SealDraft(Draft{ID: "fixture", Name: "Fixture", Raw: &raw}); err == nil {
-		t.Fatal("accepted oversized aggregate blob data")
-	}
-	raw = referenceRaw
 	r, err := c.SealDraft(Draft{ID: "fixture", Name: "Fixture", Raw: &raw})
 	if err != nil {
 		t.Fatal(err)
 	}
 	encoded, err := json.Marshal(r.Definition)
 	if err != nil || len(encoded) > MaxDefinitionBytes {
-		t.Fatalf("maximum blob does not fit installed broker limit: length=%d err=%v", len(encoded), err)
+		t.Fatalf("two bounded blobs do not fit installed broker limit: length=%d err=%v", len(encoded), err)
+	}
+}
+
+func namedBlobBudgetFixture(count, bytesPerBlob int) (Catalog, Draft) {
+	c := Catalog{Schema: CatalogSchema, Records: map[string]Record{}, BlobAssets: make(map[string]string, count)}
+	d := Draft{ID: "blob-budget", Name: "Blob budget fixture", Profiles: make([]Profile, count)}
+	for i := range d.Profiles {
+		id := fmt.Sprintf("fixture-%d", i)
+		c.BlobAssets[id] = fmt.Sprintf("%02x", 0x40+i) + strings.Repeat("00", bytesPerBlob-1)
+		d.Profiles[i] = Profile{ID: id, Protocol: intent.PacketProtocolUDP, Ports: []uint16{443 + uint16(i)},
+			Payload: QUICInitial, QUICRepeats: 1, QUICBlobRef: id}
+	}
+	return c, d
+}
+
+func TestNativeBlobsUseDefinitionAndArgumentBudgets(t *testing.T) {
+	// Nine references and 1,260 total bytes do not oversize one datagram.
+	const count = 9
+	c, d := namedBlobBudgetFixture(count, 140)
+	r, err := c.SealDraft(d)
+	if err != nil || len(r.Definition.BlobData) != count {
+		t.Fatalf("seal managed blobs: count=%d err=%v", len(r.Definition.BlobData), err)
+	}
+	c.Records[d.ID] = r
+	transfer, err := c.Export(d.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	imported, err := (Catalog{Schema: CatalogSchema, Records: map[string]Record{}}).WithTransfer("imported", transfer)
+	if err != nil || len(imported.Records["imported"].Definition.BlobData) != count {
+		t.Fatalf("import managed blobs: %v", err)
+	}
+	argv, err := r.Definition.Compile("/engine", 42, 0x10000, 0x40000000)
+	if err != nil || strings.Count(strings.Join(argv, "\n"), "--blob=solovey_blob_") != count {
+		t.Fatalf("compile managed blobs: %v", err)
+	}
+	oversized, draft := namedBlobBudgetFixture(count, MaxNativeBlobBytes)
+	if _, err := oversized.SealDraft(draft); err == nil || !strings.Contains(err.Error(), "installation limit is 8192 bytes") {
+		t.Fatalf("expected a definition envelope error, got %v", err)
 	}
 }

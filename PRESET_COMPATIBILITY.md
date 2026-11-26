@@ -85,7 +85,7 @@ compared in source. No strategy, probe or network setting was activated.
 | Definition and packet scope | 8 KiB typed definition. Scopes of up to 64 ports retain the legacy representation for stable revisions; larger positive scopes use disjoint inclusive intervals instead of a per-port array. Runtime argv and nft transaction size are separately bounded. A Product with an older Planner and broker does not admit the new interval representation. |
 | Installed argv | On Linux the compiler reads the launcher's soft `RLIMIT_STACK`, uses the kernel's aggregate and per-string allowances, and reserves space for broker flags, the executable path and environment. Preview off Linux still uses the conservative Linux floor. This is an exec boundary, not a measurement of engine memory or available queue capacity. |
 | Lists | No fixed entry count; native lists use the existing 2 KiB aggregate filter-byte budget per Strategy. An 80-entry scope fits and is covered by the pinned engine's dry-run test. The shared catalog also has its own serialized size bound. |
-| QUIC assets | Up to eight managed assets and 1,200 custom bytes per Strategy, with the existing Host authorization. Storage outside an active definition uses the catalog byte budget. |
+| QUIC assets | 1,200 bytes per custom QUIC Initial blob, with the existing Host authorization. Referenced blobs count toward the 8 KiB activation envelope and the engine argument budget; inactive blobs use only the catalog budget. |
 
 `strategy.txt` packages may also carry `lists/<id>.txt` and
 `blobs/<id>.hex` or `blobs/<id>.bin`; `strategy.json` packages contain only that file. Exported
