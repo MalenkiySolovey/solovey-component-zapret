@@ -9,11 +9,6 @@ import (
 	"github.com/MalenkiySolovey/solovey-host/outbounds"
 )
 
-// NamedListLimit is the former catalog count limit. The serialized catalog
-// budget now bounds storage independently of the installed list limits.
-// Deprecated: use MaxCatalogBytes for catalog storage accounting.
-const NamedListLimit = 16
-
 type ListKind string
 
 const (
@@ -54,8 +49,7 @@ func (l NamedList) normalize() (NamedList, error) {
 	default:
 		return NamedList{}, errors.New("unsupported native list kind")
 	}
-	remaining := maxNativeListBytes
-	sealed, err := lists.seal(&remaining)
+	sealed, err := lists.seal()
 	if err != nil {
 		return NamedList{}, err
 	}
@@ -172,9 +166,6 @@ func (c Catalog) WithNamedList(id string, value *NamedList) (Catalog, error) {
 		}
 		c.Records[ref] = next
 	}
-	if err := c.checkSize(); err != nil {
-		return Catalog{}, err
-	}
 	return c, nil
 }
 
@@ -280,8 +271,5 @@ func (c Catalog) withImportedDraft(draft Draft, lists map[string]NamedList, blob
 	}
 	c.Records = maps.Clone(c.Records)
 	c.Records[draft.ID] = record
-	if err := c.checkSize(); err != nil {
-		return Catalog{}, err
-	}
 	return c, nil
 }

@@ -69,7 +69,7 @@ export default { zapretCatalog: {
   originalSource: 'Original source', convertedSource: 'Converted native options', templateSource: 'Template source', importTooLarge: 'The selected import exceeds {max} KiB.',
   archiveOrigin: 'ZapretGUI archive source', savedTemplateOrigin: 'Base template',
   exportFormats: 'More export options', exportZip: 'Export ZIP with dependencies', exportNative: 'Export native text',
-  storage: '{used} / {limit} bytes used', searchAssets: 'Search lists and assets', nativeFilterScope: 'These filters apply only to the native strategy. Routing rules are unchanged.',
+  storage: 'Catalog storage: {used} bytes', searchAssets: 'Search lists and assets', nativeFilterScope: 'These filters apply only to the native strategy. Routing rules are unchanged.',
   noBindings: 'No outbound references a strategy.', diagnostics: 'Diagnostics', runtimeDetails: 'Runtime details',
   desiredRevision: 'Desired revision', appliedRevision: 'Applied revision', copyEvidence: 'Copy redacted evidence', evidenceCopied: 'Redacted evidence copied.',
   draftRevision: 'Editing revision', discardDraft: 'Discard unsaved strategy changes?', effective: 'Validated native preview', validate: 'Validate',

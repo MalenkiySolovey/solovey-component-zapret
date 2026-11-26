@@ -118,8 +118,8 @@ func TestNativeBlobRejectsUnsafeInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded, err := json.Marshal(r.Definition)
-	if err != nil || len(encoded) > MaxDefinitionBytes {
-		t.Fatalf("two bounded blobs do not fit installed broker limit: length=%d err=%v", len(encoded), err)
+	if err != nil || len(encoded) == 0 {
+		t.Fatalf("two bounded blobs did not seal: length=%d err=%v", len(encoded), err)
 	}
 }
 
@@ -156,8 +156,16 @@ func TestNativeBlobsUseDefinitionAndArgumentBudgets(t *testing.T) {
 	if err != nil || strings.Count(strings.Join(argv, "\n"), "--blob=solovey_blob_") != count {
 		t.Fatalf("compile managed blobs: %v", err)
 	}
-	oversized, draft := namedBlobBudgetFixture(count, MaxNativeBlobBytes)
-	if _, err := oversized.SealDraft(draft); err == nil || !strings.Contains(err.Error(), "installation limit is 8192 bytes") {
-		t.Fatalf("expected a definition envelope error, got %v", err)
+	larger, draft := namedBlobBudgetFixture(count, MaxNativeBlobBytes)
+	large, err := larger.SealDraft(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(large.Definition)
+	if err != nil || len(encoded) <= 8<<10 {
+		t.Fatalf("the sealed blob definition should exceed the old limit: %d, %v", len(encoded), err)
+	}
+	if _, err := large.Definition.Compile("/engine", 42, 0x10000, 0x40000000); err != nil {
+		t.Fatalf("the active blob definition fits the real argument budget: %v", err)
 	}
 }

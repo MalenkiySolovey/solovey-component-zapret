@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-const maxNativeListBytes = 2048 // Across all profiles and lists in one Strategy.
-
 // NativeLists are owned by the Strategy revision. They contain data, not
 // paths; the compiler only emits the engine's inline list options.
 type NativeLists struct {
@@ -43,18 +41,14 @@ func (l *NativeLists) set(flag, input string) bool {
 	return false
 }
 
-func (l NativeLists) seal(remaining *int) (*NativeLists, error) {
+func (l NativeLists) seal() (*NativeLists, error) {
 	hasEntries := false
 	for _, list := range l.fields() {
-		canonical := make([]string, 0, min(len(*list.entries), *remaining))
+		canonical := make([]string, 0, len(*list.entries))
 		for _, raw := range *list.entries {
 			value, ok := list.parse(raw)
-			*remaining -= max(len(raw), len(value)) + 1
 			if !ok {
 				return nil, fmt.Errorf("%w: %s has an invalid entry at position %d", ErrInvalidStrategy, list.flag, len(canonical)+1)
-			}
-			if *remaining < 0 {
-				return nil, fmt.Errorf("%w: native lists need at least %d bytes; limit is %d bytes per Strategy", ErrInvalidStrategy, maxNativeListBytes-*remaining, maxNativeListBytes)
 			}
 			canonical = append(canonical, value)
 		}

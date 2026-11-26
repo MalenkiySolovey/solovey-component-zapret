@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	MaxPresetBytes       = MaxCatalogBytes
+	MaxPresetBytes       = 256 << 10 // Transfer and aggregate uncompressed ZIP data.
 	MaxNativeReviewBytes = 64 << 10
 	maxPresetEntries     = 128
 )
@@ -99,7 +99,7 @@ func presetEntryLimit(name string) (int, bool) {
 		return MaxNativeReviewBytes, true
 	}
 	if presetAssetID(name, "lists/", ".txt") != "" {
-		return maxNativeListBytes * 2, true // Also allow CRLF and list comments.
+		return MaxPresetBytes, true
 	}
 	if presetAssetID(name, "blobs/", ".hex") != "" {
 		return MaxNativeBlobBytes*2 + 2, true // Optional trailing newline.

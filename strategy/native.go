@@ -9,19 +9,10 @@ import (
 	"github.com/MalenkiySolovey/solovey-host/network/intent"
 )
 
-// Leave room in the 32 KiB transfer request for JSON escaping, the sealed
-// definition, and asset references. Runtime argv is budgeted separately.
-const MaxNativeBytes = 8 << 10
-const minimumNativeProfileBytes = len("--filter-tcp=1")
-
 var ErrUnsupportedCustomLua = errors.New("UNSUPPORTED_CUSTOM_LUA: select managed Lua source revisions instead of loading a host file or inline Lua")
 
-func nativeTextBudgetError(used int) error {
-	return fmt.Errorf("%w: native text requires at least %d bytes; limit is %d bytes", ErrInvalidStrategy, used, MaxNativeBytes)
-}
-
-// ParseNative accepts only bounded native profile fields. Raw text is an
-// editor input, never runnable engine argv.
+// ParseNative accepts native profile fields, not runnable engine argv.
+// The caller bounds the input transport; activation budgets the compiled argv.
 // The caller can retain text unchanged for a lossless raw round trip.
 func ParseNative(id, text string) (Strategy, error) {
 	value, err := parseNative(id, text)
@@ -36,9 +27,6 @@ func parseNative(id, text string) (Strategy, error) {
 }
 
 func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, error) {
-	if len(text) > MaxNativeBytes {
-		return Strategy{}, nativeTextBudgetError(len(text))
-	}
 	tokens, err := nativeSource(text)
 	if err != nil {
 		return Strategy{}, err
@@ -353,9 +341,6 @@ func FormatNative(value Strategy) (string, error) {
 		for _, arg := range profile.appendActions(nil, blob, "") {
 			fmt.Fprintln(&text, arg)
 		}
-	}
-	if text.Len() > MaxNativeBytes {
-		return "", nativeTextBudgetError(text.Len())
 	}
 	return text.String(), nil
 }
