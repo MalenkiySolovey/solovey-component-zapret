@@ -45,8 +45,8 @@ libraries byte for byte. Solovey obtains those libraries from Zapret2.
 The signature establishes release provenance for the five additional GUI Lua
 files and the list and binary assets. The manifest provides no per-file
 license metadata, and redistribution rights for these additional dependencies
-remain unconfirmed. Two base lists exceed the 256 KiB Solovey catalog budget
-individually. `ipset-all.txt` is 572,927 bytes and `russia-blacklist.txt` is
+remain unconfirmed. Two base lists exceed the one-package 256 KiB transfer
+budget individually. `ipset-all.txt` is 572,927 bytes and `russia-blacklist.txt` is
 1,773,215 bytes. The frozen distribution adds no runnable originals to the
 catalog under the current runtime and transfer contracts.
 
@@ -79,13 +79,14 @@ compared in source. No strategy, probe or network setting was activated.
 
 | Resource | Limit and reason |
 | --- | --- |
-| Saved catalog (including unused lists, blobs and Lua revisions) | 256 KiB serialized, shared with Product settings. Removed catalog-wide list/blob counts; only selected exact Lua revisions are staged into the engine. |
+| Saved catalog (including unused lists, blobs and Lua revisions) | No aggregate 256 KiB product limit. Product stores component-owned records and materializes only selected sealed definitions and exact Lua revisions on activation. Backup retains its own transport and storage limits. |
 | Import transfer | 256 KiB input and 256 KiB total uncompressed ZIP data, at most 128 regular entries with per-entry limits. Only declared text forms and bounded opaque QUIC data; no extraction. Namespace/size checks happen before entries are read. |
-| Native review and authoring | 64 KiB for inert source (covers the frozen corpus), 8 KiB for admitted editable text. Preview can explain text that cannot be stored as an active definition. |
-| Definition and packet scope | 8 KiB typed definition. Scopes of up to 64 ports retain the legacy representation for stable revisions; larger positive scopes use disjoint inclusive intervals instead of a per-port array. Runtime argv and nft transaction size are separately bounded. A Product with an older Planner and broker does not admit the new interval representation. |
+| Native review and authoring | 64 KiB per native import text entry; the editor uses its bounded request envelope. Raw text, including comments, does not enter activation. |
+| Definition and packet scope | Activated definitions share the authenticated broker request byte and JSON shape budgets with the rest of the selected batch. Scopes of up to 64 ports retain the legacy representation; larger positive scopes use disjoint inclusive intervals. Runtime argv and nft transaction budgets still apply. |
 | Installed argv | On Linux the compiler reads the launcher's soft `RLIMIT_STACK`, uses the kernel's aggregate and per-string allowances, and reserves space for broker flags, the executable path and environment. Preview off Linux still uses the conservative Linux floor. This is an exec boundary, not a measurement of engine memory or available queue capacity. |
-| Lists | No fixed entry count; native lists use the existing 2 KiB aggregate filter-byte budget per Strategy. An 80-entry scope fits and is covered by the pinned engine's dry-run test. The shared catalog also has its own serialized size bound. |
-| QUIC assets | 1,200 bytes per custom QUIC Initial blob, with the existing Host authorization. Referenced blobs count toward the 8 KiB activation envelope and the engine argument budget; inactive blobs use only the catalog budget. |
+| Lists | Native inline and managed lists retain canonical entry validation. The selected aggregate must fit the actual broker frame and compiled argument budgets; there is no 2 KiB strategy-wide list limit. |
+| QUIC assets | 1,200 bytes per custom QUIC Initial blob with existing Host authorization. Selected bytes count toward the broker and engine budgets; inactive blobs are persisted only. |
+| Lua source | 256 KiB per source upload. Only selected exact revisions contribute to the activation request and the native loader. |
 
 `strategy.txt` packages may also carry `lists/<id>.txt` and
 `blobs/<id>.hex` or `blobs/<id>.bin`; `strategy.json` packages contain only that file. Exported

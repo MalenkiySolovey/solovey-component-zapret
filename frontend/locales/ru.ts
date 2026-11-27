@@ -69,7 +69,7 @@ export default { zapretCatalog: {
   originalSource: 'Исходный текст', convertedSource: 'Преобразованные параметры nfqws2', templateSource: 'Источник шаблона', importTooLarge: 'Размер импорта превышает {max} КиБ.',
   archiveOrigin: 'Исходный архив ZapretGUI', savedTemplateOrigin: 'Исходный шаблон',
   exportFormats: 'Другие варианты экспорта', exportZip: 'Экспорт ZIP с зависимостями', exportNative: 'Экспорт параметров nfqws2',
-  storage: 'Использовано {used} из {limit} байт', searchAssets: 'Поиск списков и данных', nativeFilterScope: 'Фильтры действуют только в стратегии движка. Правила маршрутизации не меняются.',
+  storage: 'Размер каталога: {used} байт', searchAssets: 'Поиск списков и данных', nativeFilterScope: 'Фильтры действуют только в стратегии движка. Правила маршрутизации не меняются.',
   noBindings: 'Нет исходящих подключений с привязанной стратегией.', diagnostics: 'Диагностика', runtimeDetails: 'Рабочие параметры',
   desiredRevision: 'Выбранная ревизия', appliedRevision: 'Применённая ревизия', copyEvidence: 'Копировать данные без идентификаторов', evidenceCopied: 'Данные скопированы.',
   draftRevision: 'Ревизия черновика', discardDraft: 'Отменить несохранённые изменения стратегии?', effective: 'Проверенные параметры движка', validate: 'Проверить',

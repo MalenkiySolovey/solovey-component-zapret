@@ -76,7 +76,7 @@ func guiPresetEntryLimit(path string) (int, bool) {
 		return MaxNativeReviewBytes, true
 	}
 	if name, ok := strings.CutPrefix(path, "lists/"); ok && guiTextFileName(name) {
-		return maxNativeListBytes * 2, true
+		return MaxPresetBytes, true
 	}
 	return 0, false
 }

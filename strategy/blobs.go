@@ -108,8 +108,5 @@ func (c Catalog) WithNamedBlob(id string, data *string) (Catalog, error) {
 		}
 		c.Records[ref] = next
 	}
-	if err := c.checkSize(); err != nil {
-		return Catalog{}, err
-	}
 	return c, nil
 }

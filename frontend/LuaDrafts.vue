@@ -85,7 +85,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { catalogError, loadLuaDrafts, saveLuaDraft, type LuaDraft, type LuaDraftView, type LuaOrigin } from './catalog'
 
-const props = defineProps<{ search: string | null; catalogRevision: string; storageLimit: number; disabled: boolean }>()
+const props = defineProps<{ search: string | null; catalogRevision: string; sourceLimit: number; disabled: boolean }>()
 const emit = defineEmits<{ changed: [] }>()
 const { t } = useI18n()
 const origins: LuaOrigin[] = ['administrator', 'zapretgui', 'external']
@@ -162,7 +162,7 @@ function readFile(event: Event) {
   if (!file || !form) return
   return run(async () => {
     if (!/\.lua$/i.test(file.name)) throw new Error(t('zapretCatalog.lua.fileType'))
-    if (file.size > props.storageLimit) throw new Error(t('zapretCatalog.importTooLarge', { max: props.storageLimit / 1024 }))
+    if (file.size > props.sourceLimit) throw new Error(t('zapretCatalog.importTooLarge', { max: props.sourceLimit / 1024 }))
     try { form.draft.source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer()) }
     catch { throw new Error(t('zapretCatalog.lua.fileType')) }
     form.file = file.name
@@ -181,8 +181,8 @@ function downloadSource(id: string, source: string) {
 const save = () => run(async () => {
   const form = editor.value
   if (!form || !canSave.value) return
-  if (new TextEncoder().encode(form.draft.source).length > props.storageLimit) {
-    throw new Error(t('zapretCatalog.importTooLarge', { max: props.storageLimit / 1024 }))
+  if (new TextEncoder().encode(form.draft.source).length > props.sourceLimit) {
+    throw new Error(t('zapretCatalog.importTooLarge', { max: props.sourceLimit / 1024 }))
   }
   snapshot.value = await saveLuaDraft(form.mode, form.id.trim(), form.revision,
     { ...form.draft, sourceRef: form.draft.sourceRef?.trim() })

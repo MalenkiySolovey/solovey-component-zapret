@@ -100,7 +100,7 @@
     <section v-if="section === 'assets'" class="mb-4" :aria-label="t('zapretCatalog.assets')">
       <div class="catalog-tools mb-3">
         <v-text-field v-model="assetSearch" :label="t('zapretCatalog.searchAssets')" prepend-inner-icon="mdi-magnify" clearable density="compact" hide-details />
-        <p v-if="view.storageLimit" class="text-caption my-2">{{ t('zapretCatalog.storage', { used: view.storageUsed ?? 0, limit: view.storageLimit }) }}</p>
+        <p v-if="view.storageUsed" class="text-caption my-2">{{ t('zapretCatalog.storage', { used: view.storageUsed }) }}</p>
       </div>
       <p class="text-body-2 text-medium-emphasis mb-3">{{ t('zapretCatalog.nativeFilterScope') }}</p>
       <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-2">
@@ -132,7 +132,7 @@
         </v-list-item>
         <v-list-item v-if="!filteredBlobs.length" :title="t(namedBlobs.length ? 'zapretCatalog.noMatches' : 'zapretCatalog.noBlobs')" />
       </v-list>
-      <LuaDrafts :key="hostID" :search="assetSearch" :catalog-revision="view.revision" :storage-limit="view.storageLimit ?? presetBytes"
+      <LuaDrafts :key="hostID" :search="assetSearch" :catalog-revision="view.revision" :source-limit="view.luaSourceLimit ?? presetBytes"
         :disabled="busy" class="mt-5" @changed="refresh" />
     </section>
     <section v-if="section === 'runtime'" aria-labelledby="zapret-binding-status">
