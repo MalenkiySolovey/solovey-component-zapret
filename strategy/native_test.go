@@ -366,6 +366,56 @@ func TestNativeProfileRoundTrip(t *testing.T) {
 	}
 }
 
+func TestNativeManagedLuaPreservesMixedActionOrder(t *testing.T) {
+	const source = "function inspect() return VERDICT_PASS end\n"
+	catalog := Catalog{
+		Schema: CatalogSchema, Records: map[string]Record{},
+		LuaDrafts: map[string]LuaDraft{"inspect": {Origin: "administrator", Source: source}},
+	}
+	// LuaDraft.Revision includes provenance, so use the catalog's exact stored
+	// draft rather than reconstructing a source-only digest at the call site.
+	ref := LuaReference{ID: "inspect", Revision: catalog.LuaDrafts["inspect"].Revision()}
+
+	for name, raw := range map[string]string{
+		"builtin-first": "--name=mixed\n--filter-tcp=443\n--filter-l7=tls\n--payload=tls_client_hello\n" +
+			"--lua-desync=multisplit:pos=9\n--lua-desync=inspect:first=1\n",
+		"managed-first": "--name=mixed\n--filter-tcp=443\n--filter-l7=tls\n--payload=tls_client_hello\n" +
+			"--lua-desync=inspect:first=1\n--lua-desync=multisplit:pos=9\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			record, err := catalog.SealDraft(Draft{ID: "mixed-" + name, Name: "Mixed", Raw: &raw, ManagedLua: []LuaReference{ref}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			profile := record.Definition.Profiles[0]
+			if len(profile.ActionOrder) != 2 || len(profile.LuaActions) != 1 || profile.Payload != "" ||
+				profile.ActionOrder[0].Kind == profile.ActionOrder[1].Kind {
+				t.Fatalf("mixed action order was not retained: %+v", profile)
+			}
+			canonical, err := catalog.SealDraft(Draft{ID: record.Definition.ID, Name: record.Name,
+				Profiles: record.Definition.Profiles, ManagedLua: record.Definition.ManagedLua})
+			if err != nil || canonical.Definition.Revision != record.Definition.Revision {
+				t.Fatalf("mixed visual round trip changed the native definition: %v", err)
+			}
+			modules, err := catalog.SelectedLua(record.Definition.ManagedLua)
+			if err != nil {
+				t.Fatal(err)
+			}
+			args, _, _, err := CompileManagedBindings("/engine", "/run/managed.lua", 401, 0x40000000,
+				[]MarkedStrategy{{Strategy: record.Definition, QueueMark: 0x120000}}, [][]LuaModule{modules}, false, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			joined := strings.Join(args, "\x00")
+			builtin := strings.Index(joined, "--lua-desync=multisplit:pos=9")
+			managed := strings.Index(joined, "--lua-desync=solovey_managed_0_0:first=1")
+			if builtin < 0 || managed < 0 || (name == "builtin-first") != (builtin < managed) {
+				t.Fatalf("compiled native action order changed: %s", joined)
+			}
+		})
+	}
+}
+
 func TestNativeProfileRejectsExecutorAndAuthorityOptions(t *testing.T) {
 	for _, raw := range []string{
 		"--filter-tcp=443 --lua-init=@/tmp/local.lua",

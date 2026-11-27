@@ -65,6 +65,10 @@ type Profile struct {
 	L7Filter    string                `json:"l7Filter,omitempty"` // Independent L7 filter on a passive profile.
 	Pass        bool                  `json:"pass,omitempty"`     // The original engine's explicit no-op Lua action.
 	LuaActions  []LuaAction           `json:"luaActions,omitempty"`
+	// ActionOrder is populated only when a profile mixes the legacy built-in
+	// action slots with managed or typed Lua actions. Keeping the old fields for
+	// single-kind profiles preserves their sealed revisions and wire shape.
+	ActionOrder []NativeActionRef `json:"actionOrder,omitempty"`
 }
 
 type Strategy struct {
@@ -141,6 +145,7 @@ func Seal(value Strategy) (Strategy, error) {
 		}
 		profile.HTTPActions = slices.Clone(profile.HTTPActions)
 		profile.LuaActions = slices.Clone(profile.LuaActions)
+		profile.ActionOrder = slices.Clone(profile.ActionOrder)
 		usesManagedLua = usesManagedLua || len(profile.LuaActions) != 0
 		if err := profile.sealOutRanges(); err != nil {
 			return Strategy{}, fmt.Errorf("%w: profile %q: %w", ErrInvalidStrategy, profile.ID, err)
@@ -182,7 +187,7 @@ func (p Profile) portsOn(protocol intent.PacketProtocol) ([]uint16, []intent.Por
 }
 
 func (p Profile) hasAction() bool {
-	return p.SplitAt != 0 || p.QUICRepeats != 0 || p.Circular != nil || len(p.HTTPActions) != 0 || p.Pass || len(p.LuaActions) != 0
+	return p.SplitAt != 0 || p.QUICRepeats != 0 || p.Circular != nil || len(p.HTTPActions) != 0 || p.Pass || len(p.LuaActions) != 0 || len(p.ActionOrder) != 0
 }
 
 func nativeAssets(profiles []Profile) []AssetRef {
@@ -205,6 +210,9 @@ func (p Profile) validAction() bool {
 	}
 	if p.L7Filter != "" && (p.hasAction() && !p.Pass && len(p.LuaActions) == 0 || !validNativeSelector(p.L7Filter, nativeL7Names)) {
 		return false
+	}
+	if len(p.ActionOrder) != 0 {
+		return p.validOrderedAction()
 	}
 	switch {
 	case len(p.LuaActions) != 0:
@@ -470,6 +478,11 @@ func appendProfiles(args []string, value Strategy, mark uint32, binding int, gro
 		var observation string
 		if trace {
 			observation = fmt.Sprintf("--lua-desync=solovey_profile_match:slot=%d/%d", binding+1, i+1)
+		}
+		if len(profile.ActionOrder) != 0 {
+			args = profile.appendOrderedActions(args, names[value.BlobData[profile.QUICBlobRef]], entries, observation)
+			entries = entries[len(profile.LuaActions):]
+			continue
 		}
 		if count := len(profile.LuaActions); count != 0 {
 			args = profile.appendManagedLuaActions(args, entries[:count], observation)

@@ -36,6 +36,7 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 		l7, inRange, outRange string
 		outRangePending       bool
 		seen                  map[string]bool
+		actionOrder           []NativeActionRef
 	}
 	first := func(id string) draft {
 		return draft{Profile: Profile{ID: id}, seen: map[string]bool{}}
@@ -45,6 +46,15 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 	finish := func() error {
 		if current.outRangePending {
 			return fmt.Errorf("%w: --out-range needs a following action in native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
+		}
+		if len(current.LuaActions) != 0 && current.hasNonManagedAction() {
+			if current.Protocol == "" || current.inRange != "" {
+				return fmt.Errorf("%w: managed Lua cannot be combined with an incoming-range or Circular return-path action", ErrInvalidStrategy)
+			}
+			current.Payload, current.L7Filter = "", current.l7
+			current.ActionOrder = append([]NativeActionRef(nil), current.actionOrder...)
+			value.Profiles = append(value.Profiles, current.Profile)
+			return nil
 		}
 		if len(current.LuaActions) != 0 {
 			if current.Protocol == "" || current.inRange != "" {
@@ -86,8 +96,9 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 			}
 			continue
 		}
-		repeatable := key == "--in-range" || key == "--out-range" || key == "--lua-desync" && (current.Circular != nil || len(current.HTTPActions) != 0 || len(current.LuaActions) != 0) ||
-			key == "--payload" && len(current.LuaActions) != 0
+		repeatable := key == "--in-range" || key == "--out-range" || key == "--lua-desync" &&
+			(current.Circular != nil || len(current.HTTPActions) != 0 || len(current.LuaActions) != 0 || len(current.actionOrder) != 0) ||
+			key == "--payload" && len(current.actionOrder) != 0
 		if !hasValue || input == "" || current.seen[key] && !repeatable {
 			return Strategy{}, bad
 		}
@@ -152,8 +163,8 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 			current.Payload = Payload(input)
 		case "--lua-desync":
 			if len(managed) != 0 && !builtInLuaAction(input) {
-				if current.hasAction() && len(current.LuaActions) == 0 {
-					return Strategy{}, token.invalid(fmt.Errorf("%w: mixing an installed built-in action and a managed callback in one profile is not yet supported", ErrInvalidStrategy))
+				if current.Circular != nil || current.inRange != "" {
+					return Strategy{}, token.invalid(fmt.Errorf("%w: managed Lua cannot be inserted into Circular's return-path range", ErrInvalidStrategy))
 				}
 				name, arguments, _ := strings.Cut(input, ":")
 				action := LuaAction{Function: name, Arguments: arguments, Payload: current.Payload, OutRange: current.outRange}
@@ -161,11 +172,9 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 					return Strategy{}, bad
 				}
 				current.LuaActions = append(current.LuaActions, action)
+				current.actionOrder = append(current.actionOrder, NativeActionRef{Kind: nativeActionManaged, Index: len(current.LuaActions) - 1})
 				current.outRangePending = false
 				continue
-			}
-			if len(current.LuaActions) != 0 {
-				return Strategy{}, token.invalid(fmt.Errorf("%w: mixing an installed built-in action and a managed callback in one profile is not yet supported", ErrInvalidStrategy))
 			}
 			if current.Circular != nil {
 				if current.inRange != circularVariantRange || !current.seen["--payload"] || !current.Circular.addVariant(input) {
@@ -179,14 +188,19 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 				}
 				action.OutRange, current.outRangePending = current.outRange, false
 				current.HTTPActions = append(current.HTTPActions, action)
+				current.actionOrder = append(current.actionOrder, NativeActionRef{Kind: nativeActionHTTP, Index: len(current.HTTPActions) - 1})
 				continue
 			}
 			if len(current.HTTPActions) != 0 {
 				return Strategy{}, bad
 			}
 			if input == "pass" {
+				if current.hasNonManagedAction() {
+					return Strategy{}, bad
+				}
 				current.Pass = true
 				current.OutRange, current.outRangePending = current.outRange, false
+				current.actionOrder = append(current.actionOrder, NativeActionRef{Kind: nativeActionBuiltin, Payload: current.Payload})
 				continue
 			}
 			if fails, ok := strings.CutPrefix(input, "circular:fails="); input == "circular" || ok {
@@ -231,6 +245,7 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 			} else {
 				return Strategy{}, bad
 			}
+			current.actionOrder = append(current.actionOrder, NativeActionRef{Kind: nativeActionBuiltin, Payload: current.Payload})
 			current.OutRange, current.outRangePending = current.outRange, false
 		default:
 			if current.Lists == nil {
@@ -324,6 +339,16 @@ func FormatNative(value Strategy) (string, error) {
 		}
 		if profile.Circular != nil {
 			for _, arg := range profile.circularArgs("", false) {
+				fmt.Fprintln(&text, arg)
+			}
+			continue
+		}
+		if len(profile.ActionOrder) != 0 {
+			var blob string
+			if profile.QUICBlobRef != "" {
+				blob = nativeBlobRefPrefix + profile.QUICBlobRef
+			}
+			for _, arg := range profile.appendOrderedActions(nil, blob, nil, "") {
 				fmt.Fprintln(&text, arg)
 			}
 			continue

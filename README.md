@@ -82,11 +82,21 @@ packages retain dependencies and order but do not transfer execution consent.
 
 The original nfqws2 interpreter loads managed code into a separate environment
 per Strategy. Callbacks receive a copy of the selected packet data and their
-own per-flow Lua state. They can inspect data and return pass or drop; packet
-mutation, raw transmission, shell, filesystem and arbitrary module loading are
-not available in that environment. This is not the entire upstream Lua API.
-Pinned built-ins retain their existing execution and packet behavior. New or
-changed active selections are initialized before the live plan is retired.
+own per-flow Lua state; the shared built-in flow state is not exposed. The
+pinned native API is available with its original argument semantics, including
+packet parsing/reconstruction and checksum helpers, address and bit helpers,
+raw-send and conntrack helpers, timers, statistics, compression/crypto and
+execution-plan helpers. These functions still operate inside the original
+engine process and selected packet path; they are not a second network or
+privilege owner.
+
+Host loaders, `io`, unrestricted `os`, `package`, `debug`, arbitrary host paths,
+shell execution and unselected modules remain unavailable. `require` resolves
+only the explicitly selected managed dependencies. Imported or third-party
+source still needs provenance and exact-revision approval, and the installed
+Host must delegate execution through the broker-owned sealed bundle. Pinned
+built-ins retain their existing execution and packet behavior. New or changed
+active selections are initialized before the live plan is retired.
 
 See [Preset and strategy compatibility](PRESET_COMPATIBILITY.md) for the frozen
 reference, preview and package formats, and authoring versus runtime limits.
