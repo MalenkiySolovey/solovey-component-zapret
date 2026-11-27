@@ -6,14 +6,36 @@ local base = {}
 for _, name in ipairs({
     "assert", "error", "ipairs", "next", "pairs", "pcall", "rawequal", "rawget",
     "rawlen", "rawset", "select", "setmetatable", "tonumber", "tostring", "type", "xpcall",
-    "VERDICT_PASS", "VERDICT_DROP", "raw_packet", "resolve_pos", "resolve_multi_pos", "resolve_range",
-    "dissect", "dissect_tcphdr", "dissect_udphdr", "dissect_icmphdr", "dissect_iphdr", "dissect_ip6hdr",
-    "reconstruct_dissect", "reconstruct_tcphdr", "reconstruct_udphdr", "reconstruct_icmphdr",
-    "reconstruct_iphdr", "reconstruct_ip6hdr", "parse_hex", "tls_mod", "pton", "ntop",
-    "u8", "u16", "u24", "u32", "u48", "bu8", "bu16", "bu24", "bu32", "bu48",
-    "u8add", "u16add", "u24add", "u32add", "u48add", "swap16", "swap24", "swap32", "swap48",
-    "brandom", "brandom_az", "brandom_az09", "bxor", "bor", "band", "hash",
-    "clock_gettime", "clock_getfloattime", "localtime", "gmtime", "timelocal", "timegm",
+    "VERDICT_PASS", "VERDICT_DROP",
+}) do
+    base[name] = engine[name]
+end
+
+-- These are the functions registered by the pinned nfqws2 Lua API. Keep the
+-- original engine functions and argument semantics; the administrator's
+-- explicit Host delegation is the authority boundary. Host file loaders,
+-- package search and shell-capable standard-library entry points remain out of
+-- the managed environment because the bundle is intentionally sealed and
+-- source-selected by the broker.
+for _, name in ipairs({
+    "DLOG_ERR", "DLOG_CONDUP", "ntop", "pton",
+    "bitlshift", "bitrshift", "bitand", "bitor", "bitxor", "bitget", "bitset",
+    "bitnot", "bitnot8", "bitnot16", "bitnot24", "bitnot32", "bitnot48",
+    "u8", "u16", "u24", "u32", "u48", "u8add", "u16add", "u24add", "u32add", "u48add",
+    "bu8", "bu16", "bu24", "bu32", "bu48", "swap16", "swap24", "swap32", "swap48",
+    "divint", "brandom", "brandom_az", "brandom_az09", "bcryptorandom", "bxor", "bor", "band",
+    "hash", "aes", "aes_gcm", "aes_ctr", "hkdf", "parse_hex",
+    "instance_cutoff", "lua_cutoff", "execution_plan", "execution_plan_cancel", "raw_packet",
+    "uname", "clock_gettime", "clock_getfloattime", "getpid", "gettid",
+    "reconstruct_tcphdr", "reconstruct_udphdr", "reconstruct_icmphdr", "reconstruct_ip6hdr",
+    "reconstruct_iphdr", "reconstruct_dissect", "dissect_tcphdr", "dissect_udphdr",
+    "dissect_icmphdr", "dissect_ip6hdr", "dissect_iphdr", "dissect",
+    "csum_ip4_fix", "csum_tcp_fix", "csum_udp_fix", "csum_icmp_fix",
+    "rawsend", "rawsend_dissect", "conntrack_feed", "get_source_ip", "get_ifaddrs",
+    "resolve_pos", "resolve_multi_pos", "resolve_range", "tls_mod",
+    "gunzip_init", "gunzip_end", "gunzip_inflate", "gzip_init", "gzip_end", "gzip_deflate",
+    "stat", "localtime", "gmtime", "timelocal", "timegm",
+    "timer_set", "timer_del", "timer_info", "timer_enum",
 }) do
     base[name] = engine[name]
 end
