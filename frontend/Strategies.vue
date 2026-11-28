@@ -337,7 +337,7 @@
           <v-btn :loading="busy" :disabled="!name.trim()" color="primary" variant="flat" prepend-icon="mdi-content-save-outline" @click="save">{{ t('zapretCatalog.save') }}</v-btn>
         </footer>
     </section>
-    <PresetReview v-if="importReview" :revision="importReview.revision" :template="importReview.template"
+    <PresetReview v-if="importReview" :revision="importReview.revision" :template="importReview.template" :transfer-limit="view?.presetTransferLimit"
       :template-label="importReview.template ? templateName(importReview.template) : undefined" @close="importReview = undefined" @saved="presetSaved" />
     <v-dialog :model-value="deleteRecord !== undefined" max-width="440" @update:model-value="deleteRecord = undefined">
       <v-card :title="t('zapretCatalog.delete')" :text="t('zapretCatalog.deleteConfirm', { name: deleteRecord?.name ?? '' })">
