@@ -86,7 +86,7 @@ func guiTextFileName(name string) bool {
 		strings.TrimSpace(name) == name && !strings.ContainsAny(name, `/\<>:"|?*,`) && !strings.ContainsFunc(name, unicode.IsControl)
 }
 
-func (c Catalog) prepareGUIPreset(id, name string, data []byte, files map[string][]byte, dependencyIDs map[string]string) (Catalog, PresetPreview, error) {
+func (c Catalog) prepareGUIPreset(id, name string, data []byte, files map[string][]byte, dependencyIDs map[string]string, listWorkspace int) (Catalog, PresetPreview, error) {
 	var manifest guiPresetManifest
 	if err := decodePresetJSON(files["manifest.json"], &manifest); err != nil || manifest.Format != guiPresetFormat || manifest.Version != 1 {
 		return Catalog{}, PresetPreview{}, errors.New("expected a ZapretGUI portable preset manifest, version 1, with unique known fields")
@@ -116,7 +116,7 @@ func (c Catalog) prepareGUIPreset(id, name string, data []byte, files map[string
 	delete(files, "manifest.json")
 	delete(files, "preset.txt")
 	return c.prepareNativeSource(id, firstName(name, manifest.FileName[:len(manifest.FileName)-len(".txt")]), nativePresetSource{
-		text: string(source), files: files, origin: &origin, guiLists: lists, dependencyIDs: dependencyIDs,
+		text: string(source), files: files, origin: &origin, guiLists: lists, dependencyIDs: dependencyIDs, listWorkspace: &listWorkspace,
 	})
 }
 

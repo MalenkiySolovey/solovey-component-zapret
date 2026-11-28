@@ -59,14 +59,15 @@ type Catalog struct {
 }
 
 type Draft struct {
-	ID         string         `json:"id"`
-	Name       string         `json:"name"`
-	Raw        *string        `json:"raw,omitempty"`
-	Profiles   []Profile      `json:"profiles,omitempty"`
-	ListRefs   ListRefs       `json:"listRefs,omitempty"`
-	ManagedLua []LuaReference `json:"managedLua,omitempty"`
-	origin     *PresetOrigin
-	luaSources map[string]LuaDraft
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Raw           *string        `json:"raw,omitempty"`
+	Profiles      []Profile      `json:"profiles,omitempty"`
+	ListRefs      ListRefs       `json:"listRefs,omitempty"`
+	ManagedLua    []LuaReference `json:"managedLua,omitempty"`
+	origin        *PresetOrigin
+	luaSources    map[string]LuaDraft
+	listWorkspace *int
 }
 
 // Transfer binds the strategy to the immutable engine and assets. Referenced
@@ -109,9 +110,26 @@ func (c Catalog) SealDraft(d Draft) (Record, error) {
 	if _, err := c.resolveLua(d.ManagedLua, false); err != nil {
 		return Record{}, err
 	}
-	definition, err := parseNativeWithLua(d.ID, raw, d.ManagedLua)
+	var listProjection nativeListProjection
+	definition, err := parseNativeWithLua(d.ID, raw, d.ManagedLua, &listProjection)
 	if err != nil {
 		return Record{}, err
+	}
+	if err := c.checkTemplateLists(listProjection.templates); err != nil {
+		return Record{}, err
+	}
+	listRefs, effective, err := listProjection.resolve(d.ListRefs)
+	if err != nil {
+		return Record{}, err
+	}
+	if len(listProjection.active) != 0 {
+		workspace := MaxPresetExpandedBytes
+		if d.listWorkspace != nil {
+			workspace = *d.listWorkspace
+		}
+		if err := checkProjectedListBudget(c.Lists, effective, workspace); err != nil {
+			return Record{}, err
+		}
 	}
 	definition, err = c.resolveBlobs(definition)
 	if err != nil {
@@ -128,7 +146,7 @@ func (c Catalog) SealDraft(d Draft) (Record, error) {
 	if origin != nil {
 		origin = new(*origin)
 	}
-	return c.withResolvedLists(Record{Name: d.Name, Raw: raw, Definition: definition, ListRefs: d.ListRefs, Origin: origin})
+	return c.withResolvedLists(Record{Name: d.Name, Raw: raw, Definition: definition, ListRefs: listRefs, Origin: origin}, effective)
 }
 
 func (r Record) Validate() error { return (Catalog{}).validateRecord(r) }
@@ -141,7 +159,7 @@ func (c Catalog) validateRecord(r Record) error {
 	if err != nil {
 		return err
 	}
-	if _, err := r.Definition.Verified(); err != nil || r.Definition.Revision != checked.Definition.Revision {
+	if _, err := r.Definition.Verified(); err != nil || r.Definition.Revision != checked.Definition.Revision || !maps.Equal(r.ListRefs, checked.ListRefs) {
 		return errors.New("strategy native text and sealed definition do not match")
 	}
 	return nil

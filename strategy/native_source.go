@@ -68,7 +68,22 @@ func nativeSource(text string) ([]sourceToken, error) {
 		start += len(line) + 1
 		lineNumber++
 	}
-	return tokens, nil
+	// getopt_long accepts a separate value for --import. Keep the original
+	// byte range so the preset rewriter does not normalize the author's text.
+	options := tokens[:0]
+	for i := 0; i < len(tokens); i++ {
+		token := tokens[i]
+		if token.text == "--import" && i+1 < len(tokens) && !strings.HasPrefix(tokens[i+1].text, "--") {
+			i++
+			token.text += "=" + tokens[i].text
+			token.end = tokens[i].end
+			if token.Line == tokens[i].Line {
+				token.End = tokens[i].End
+			}
+		}
+		options = append(options, token)
+	}
+	return options, nil
 }
 
 func sourceSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\r' }

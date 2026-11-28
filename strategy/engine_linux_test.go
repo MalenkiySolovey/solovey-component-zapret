@@ -115,6 +115,11 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 		validateEngineArgs(t, root, []string{"--qnum=401", "--filter-tcp=~80-82,81", "--filter-udp=*"})
 		validatePresetEngine(t, root, PresetInput{Format: "native", Content: []byte(text)})
 	})
+	t.Run("native-profile-template", func(t *testing.T) {
+		validateEngineArgs(t, root, append([]string{"--qnum=401", "--lua-init=@" + filepath.Join(root, "lua", "zapret-lib.lua"),
+			"--lua-init=@" + filepath.Join(root, "lua", "zapret-antidpi.lua")}, strings.Fields(nativeTemplateFixture)...))
+		validatePresetEngine(t, root, PresetInput{Format: "native", Content: []byte(nativeTemplateFixture)})
+	})
 	t.Run("native-passive-and-pass", func(t *testing.T) {
 		validatePresetEngine(t, root, PresetInput{Format: "native", Content: []byte(nativePassiveFixture)})
 	})

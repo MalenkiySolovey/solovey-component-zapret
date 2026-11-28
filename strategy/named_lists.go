@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/MalenkiySolovey/solovey-host/outbounds"
 )
@@ -29,11 +30,103 @@ type NativeListRefs struct {
 	IPSetExclude    string `json:"ipSetExclude,omitempty"`
 }
 
-// ListRefs maps native profile IDs to their optional shared list references.
+// ListRefs maps profile IDs to editor-selected lists. The template: namespace
+// indexes managed file directives kept in raw source, even when not active.
 type ListRefs map[string]NativeListRefs
+
+const templateListPrefix = "template:"
 
 func (r NativeListRefs) ids() [4]string {
 	return [...]string{r.HostList, r.HostListExclude, r.IPSet, r.IPSetExclude}
+}
+
+func (r *NativeListRefs) slot(option string) *string {
+	switch option {
+	case "--hostlist":
+		return &r.HostList
+	case "--hostlist-exclude":
+		return &r.HostListExclude
+	case "--ipset":
+		return &r.IPSet
+	case "--ipset-exclude":
+		return &r.IPSetExclude
+	}
+	return nil
+}
+
+func (r *NativeListRefs) merge(other NativeListRefs) error {
+	slots := [...]*string{&r.HostList, &r.HostListExclude, &r.IPSet, &r.IPSetExclude}
+	for i, id := range other.ids() {
+		if id == "" {
+			continue
+		}
+		if *slots[i] != "" && *slots[i] != id {
+			return fmt.Errorf("managed lists %q and %q occupy the same filter slot; combine them into one managed list and select it explicitly", *slots[i], id)
+		}
+		*slots[i] = id
+	}
+	return nil
+}
+
+type nativeListProjection struct {
+	templates ListRefs
+	active    ListRefs
+}
+
+func (p *nativeListProjection) addTemplate(id string, refs NativeListRefs) {
+	if p.templates == nil {
+		p.templates = make(ListRefs)
+	}
+	p.templates[templateListPrefix+id] = refs
+}
+
+func (p *nativeListProjection) addActive(id string, refs NativeListRefs) {
+	if p.active == nil {
+		p.active = make(ListRefs)
+	}
+	p.active[id] = refs
+}
+
+func (p nativeListProjection) resolve(saved ListRefs) (authored, effective ListRefs, err error) {
+	authored, effective = maps.Clone(p.templates), maps.Clone(p.active)
+	for profile, refs := range saved {
+		if strings.HasPrefix(profile, templateListPrefix) {
+			continue // Derived from raw source, never from a stale client projection.
+		}
+		if refs == (NativeListRefs{}) {
+			return nil, nil, errors.New("empty native list references")
+		}
+		if authored == nil {
+			authored = make(ListRefs)
+		}
+		authored[profile] = refs
+		if effective == nil {
+			effective = make(ListRefs)
+		}
+		merged := effective[profile]
+		if err := merged.merge(refs); err != nil {
+			return nil, nil, fmt.Errorf("profile %q: %w", profile, err)
+		}
+		effective[profile] = merged
+	}
+	return authored, effective, nil
+}
+
+func (r Record) effectiveListRefs() (ListRefs, error) {
+	for key := range r.ListRefs {
+		if strings.HasPrefix(key, templateListPrefix) {
+			var projection nativeListProjection
+			if _, err := parseNativeWithLua(r.Definition.ID, r.Raw, r.Definition.ManagedLua, &projection); err != nil {
+				return nil, err
+			}
+			authored, effective, err := projection.resolve(r.ListRefs)
+			if err == nil && !maps.Equal(authored, r.ListRefs) {
+				return nil, errors.New("template lists do not match native source")
+			}
+			return effective, err
+		}
+	}
+	return r.ListRefs, nil
 }
 
 func (l NamedList) normalize() (NamedList, error) {
@@ -70,19 +163,33 @@ func (c Catalog) validateLists() error {
 	return nil
 }
 
-func (c Catalog) withResolvedLists(r Record) (Record, error) {
-	if len(r.ListRefs) == 0 {
-		r.ListRefs = nil
+var nativeListKinds = [...]ListKind{HostListKind, HostListKind, IPSetKind, IPSetKind}
+
+func (c Catalog) checkTemplateLists(templates ListRefs) error {
+	for template, refs := range templates {
+		for i, id := range refs.ids() {
+			if id == "" {
+				continue
+			}
+			if list, ok := c.Lists[id]; !ok || list.Kind != nativeListKinds[i] || len(list.Entries) == 0 {
+				return fmt.Errorf("template %q: native list %q is missing or has the wrong kind", strings.TrimPrefix(template, templateListPrefix), id)
+			}
+		}
+	}
+	return nil
+}
+
+func (c Catalog) withResolvedLists(r Record, effective ListRefs) (Record, error) {
+	if len(effective) == 0 {
 		return r, nil
 	}
-	if len(r.ListRefs) > len(r.Definition.Profiles) {
+	if len(effective) > len(r.Definition.Profiles) {
 		return Record{}, errors.New("native lists refer to an unknown profile")
 	}
-	r.ListRefs = maps.Clone(r.ListRefs)
 	var matched int
 	for i := range r.Definition.Profiles {
 		profile := &r.Definition.Profiles[i]
-		refs, ok := r.ListRefs[profile.ID]
+		refs, ok := effective[profile.ID]
 		if !ok {
 			continue
 		}
@@ -94,13 +201,12 @@ func (c Catalog) withResolvedLists(r Record) (Record, error) {
 			profile.Lists = new(NativeLists)
 		}
 		fields := profile.Lists.fields()
-		kinds := [...]ListKind{HostListKind, HostListKind, IPSetKind, IPSetKind}
 		for j, id := range refs.ids() {
 			if id == "" {
 				continue
 			}
 			list, exists := c.Lists[id]
-			if !exists || list.Kind != kinds[j] || len(list.Entries) == 0 {
+			if !exists || list.Kind != nativeListKinds[j] || len(list.Entries) == 0 {
 				return Record{}, fmt.Errorf("native list %q is missing or has the wrong kind", id)
 			}
 			if len(*fields[j].entries) != 0 {
@@ -109,7 +215,7 @@ func (c Catalog) withResolvedLists(r Record) (Record, error) {
 			*fields[j].entries = list.Entries
 		}
 	}
-	if matched != len(r.ListRefs) {
+	if matched != len(effective) {
 		return Record{}, errors.New("native lists refer to an unknown profile")
 	}
 	var err error

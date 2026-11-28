@@ -98,7 +98,8 @@ func (c Catalog) PreparePresetWithin(id string, input PresetInput, expandedBytes
 	}
 	switch input.Format {
 	case "native":
-		return c.prepareNativeSource(id, input.Name, nativePresetSource{text: string(input.Content)})
+		workspace := presetExpansionLimit(expandedBytes) - len(input.Content)
+		return c.prepareNativeSource(id, input.Name, nativePresetSource{text: string(input.Content), listWorkspace: &workspace})
 	case "json":
 		return c.prepareTransferPreset(id, input.Name, input.Content, expandedBytes)
 	case "zip":
@@ -106,8 +107,12 @@ func (c Catalog) PreparePresetWithin(id string, input PresetInput, expandedBytes
 		if err != nil {
 			return Catalog{}, PresetPreview{}, err
 		}
+		workspace := presetExpansionLimit(expandedBytes)
+		for _, data := range files {
+			workspace -= len(data)
+		}
 		if _, ok := files["manifest.json"]; ok {
-			return c.prepareGUIPreset(id, input.Name, input.Content, files, dependencyIDs)
+			return c.prepareGUIPreset(id, input.Name, input.Content, files, dependencyIDs, workspace)
 		}
 		if encoded, ok := files["strategy.json"]; ok && len(files) == 1 {
 			if len(input.DependencyIDs) != 0 {
@@ -117,7 +122,7 @@ func (c Catalog) PreparePresetWithin(id string, input PresetInput, expandedBytes
 		}
 		if source, ok := files["strategy.txt"]; ok && files["strategy.json"] == nil {
 			delete(files, "strategy.txt")
-			return c.prepareNativeSource(id, input.Name, nativePresetSource{text: string(source), files: files, dependencyIDs: dependencyIDs})
+			return c.prepareNativeSource(id, input.Name, nativePresetSource{text: string(source), files: files, dependencyIDs: dependencyIDs, listWorkspace: &workspace})
 		}
 		return Catalog{}, PresetPreview{}, errors.New("ZIP must contain either strategy.json alone or strategy.txt with its data dependencies")
 	default:
@@ -164,11 +169,15 @@ func (c Catalog) prepareTransferPreset(id, name string, data []byte, expandedByt
 		if len(transfer.Strategy.ListRefs) == 0 {
 			return Catalog{}, PresetPreview{}, errors.New("compact preset has no native list references")
 		}
-		if err := transfer.checkPresetListBudget(presetExpansionLimit(expandedBytes) - len(data)); err != nil {
+		effective, err := transfer.Strategy.effectiveListRefs()
+		if err != nil {
+			return Catalog{}, PresetPreview{}, err
+		}
+		if err := transfer.checkPresetListBudget(effective, presetExpansionLimit(expandedBytes)-len(data)); err != nil {
 			return Catalog{}, PresetPreview{}, err
 		}
 		expected := transfer.Strategy.Definition.Revision
-		record, err := (Catalog{Lists: transfer.Lists}).withResolvedLists(transfer.Strategy)
+		record, err := (Catalog{Lists: transfer.Lists}).withResolvedLists(transfer.Strategy, effective)
 		if err != nil {
 			return Catalog{}, PresetPreview{}, fmt.Errorf("restore compact preset lists: %w", err)
 		}

@@ -140,7 +140,7 @@ func TestPresetPackageRepairsListAndBinaryConflicts(t *testing.T) {
 func TestPresetMixedSourceIsInertAndReportsOptions(t *testing.T) {
 	c := emptyPresetCatalog()
 	before := c.Revision()
-	source := "# original Windows settings\n--wf-tcp-out=443\n--lua-init=@lua/custom.lua\n" + portablePreset[len("\ufeff"):] + `--template=hidden` + "\n"
+	source := "# original Windows settings\n--wf-tcp-out=443\n--lua-init=@lua/custom.lua\n" + portablePreset[len("\ufeff"):] + `--cookie=hidden` + "\n"
 	next, review, err := c.PreparePreset("new", PresetInput{Format: "zip", Content: fixturePresetPackage(t, source)})
 	if err != nil || review.Record != nil || next.Records != nil || c.Revision() != before || review.Source != source || len(review.Profiles) != 2 {
 		t.Fatalf("mixed source was not retained as inert evidence: %+v, %v", review, err)
@@ -148,7 +148,7 @@ func TestPresetMixedSourceIsInertAndReportsOptions(t *testing.T) {
 	for i, want := range []struct {
 		option, code string
 		line         int
-	}{{"--wf-tcp-out", "platform-option", 2}, {"--lua-init", "trust-restricted", 3}, {"--template", "unrepresented-profile", 10}} {
+	}{{"--wf-tcp-out", "platform-option", 2}, {"--lua-init", "trust-restricted", 3}, {"--cookie", "unrepresented-profile", 10}} {
 		if len(review.Issues) <= i || review.Issues[i].Option != want.option || review.Issues[i].Code != want.code || review.Issues[i].Span == nil || review.Issues[i].Span.Line != want.line {
 			t.Errorf("wrong position or reason for %s: %+v", want.option, review.Issues)
 		}

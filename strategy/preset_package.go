@@ -39,7 +39,11 @@ func (c Catalog) ExportPackageWithin(id string, expandedBytes int) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	transfer = transfer.compactPresetLists()
+	effective, err := transfer.Strategy.effectiveListRefs()
+	if err != nil {
+		return nil, err
+	}
+	transfer = transfer.compactPresetLists(effective)
 	data, err := json.Marshal(transfer)
 	if err != nil {
 		return nil, err
@@ -48,7 +52,7 @@ func (c Catalog) ExportPackageWithin(id string, expandedBytes int) ([]byte, erro
 		return nil, fmt.Errorf("strategy.json needs %d bytes; ZIP file or expansion budget is %d bytes; use a catalog backup", len(data), limit)
 	}
 	if transfer.Schema == compactPresetTransferSchema {
-		if err := transfer.checkPresetListBudget(presetExpansionLimit(expandedBytes) - len(data)); err != nil {
+		if err := transfer.checkPresetListBudget(effective, presetExpansionLimit(expandedBytes)-len(data)); err != nil {
 			return nil, err
 		}
 	}
@@ -72,15 +76,15 @@ func (c Catalog) ExportPackageWithin(id string, expandedBytes int) ([]byte, erro
 
 // A ZIP transfer stores shared list entries once, not again in every profile.
 // Its revision still refers to the complete definition after rehydration.
-func (t Transfer) compactPresetLists() Transfer {
-	if len(t.Strategy.ListRefs) == 0 {
+func (t Transfer) compactPresetLists(effective ListRefs) Transfer {
+	if len(effective) == 0 {
 		return t
 	}
 	t.Schema = compactPresetTransferSchema
 	t.Strategy.Definition.Profiles = slices.Clone(t.Strategy.Definition.Profiles)
 	for i := range t.Strategy.Definition.Profiles {
 		profile := &t.Strategy.Definition.Profiles[i]
-		refs, referenced := t.Strategy.ListRefs[profile.ID]
+		refs, referenced := effective[profile.ID]
 		if !referenced || profile.Lists == nil {
 			continue
 		}
@@ -100,18 +104,23 @@ func (t Transfer) compactPresetLists() Transfer {
 	return t
 }
 
-func (t Transfer) checkPresetListBudget(remaining int) error {
-	charges := make(map[string]int, len(t.Lists))
-	for _, refs := range t.Strategy.ListRefs {
+func (t Transfer) checkPresetListBudget(effective ListRefs, remaining int) error {
+	return checkProjectedListBudget(t.Lists, effective, remaining)
+}
+
+func checkProjectedListBudget(lists map[string]NamedList, effective ListRefs, remaining int) error {
+	remaining = max(0, remaining)
+	charges := make(map[string]int, len(effective))
+	for _, refs := range effective {
 		for _, id := range refs.ids() {
 			if id == "" {
 				continue
 			}
 			charge, ok := charges[id]
 			if !ok {
-				list, exists := t.Lists[id]
+				list, exists := lists[id]
 				if !exists {
-					return fmt.Errorf("compact preset is missing native list %q", id)
+					return fmt.Errorf("projected strategy is missing native list %q", id)
 				}
 				// Allow for the field name and array framing. Valid hosts and
 				// prefixes are ASCII and need no JSON escaping.
@@ -122,7 +131,7 @@ func (t Transfer) checkPresetListBudget(remaining int) error {
 				charges[id] = charge
 			}
 			if charge > remaining {
-				return fmt.Errorf("native list %q needs %d projected bytes; %d remain in the preset expansion budget", id, charge, remaining)
+				return fmt.Errorf("native list %q needs %d projected bytes; %d remain in the strategy expansion budget", id, charge, remaining)
 			}
 			remaining -= charge
 		}
