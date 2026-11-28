@@ -1,7 +1,10 @@
 package strategy
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -130,7 +133,7 @@ func TestPinnedEngineRunsManagedLua(t *testing.T) {
 	if root == "" {
 		t.Skip("requires independently built nfqws2 engine input")
 	}
-	dependency := "\xef\xbb\xbf#!/usr/bin/env lua\r\nreturn { verdict = function() return VERDICT_PASS end }"
+	dependency := "\xef\xbb\xbf#!/usr/bin/env lua\r\nreturn { verdict = function() return VERDICT_PASS end, edit = function() return VERDICT_MODIFY | VERDICT_PRESERVE_NEXT end }"
 	source := `
 local dep = require("example")
 assert(_G == _ENV and getmetatable(_G) == false)
@@ -149,45 +152,60 @@ assert(getmetatable("") == nil)
 assert(not pcall(require, "unselected"))
 function observe(ctx, desync)
     assert(desync.track.private == nil)
+    assert(desync.track.lua_state.private == nil)
     desync.track.seen = true
+    desync.track.lua_state.seen = true
     assert(u16(bu16(80)) == 80)
     return dep.verdict()
 end
-function invalid(ctx, desync) error("controlled action failure") end`
+local retained
+function edit(ctx, desync)
+    assert(desync.track.lua_state.seen)
+    retained = desync.dis
+    retained.payload = "new"
+    return dep.edit()
+end
+function invalid(ctx, desync)
+    retained.payload = "not shared"
+    desync.dis.ip.ip_dst = "bad address"
+    return VERDICT_MODIFY
+end
+function retarget(ctx, desync)
+    desync.dis.udp.uh_dport = desync.dis.udp.uh_dport + 1
+    return VERDICT_MODIFY
+end
+function multiple() return VERDICT_PASS, VERDICT_DROP end
+function invalid_flag() return VERDICT_MODIFY | 8 end
+function error_action() error("controlled action failure") end`
 	modules := []LuaModule{
 		{"example", LuaDraft{Origin: "external", SourceRef: "test fixture", Source: dependency}, LuaSourceDigest(dependency), LuaSourceDigest(dependency)},
 		{"operator", LuaDraft{Origin: "administrator", Source: source}, LuaSourceDigest(source), ""},
 	}
-	program, entries, err := CompileManagedLua(0, modules, []string{"observe", "invalid"})
+	program, entries, err := CompileManagedLua(0, modules, []string{"observe", "edit", "invalid", "retarget", "multiple", "invalid_flag", "error_action"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// The test uses the original Lua engine without wiring a live packet hook.
 	// The trusted test tail calls the generated callbacks with inert data.
 	program += `
-local packet = {track = {private = function() end}}
+local original = dissect(parse_hex("4500001f00000000401100007f0000017f000001c001a157000b00006f6c64"))
+assert(original.udp and original.payload == "old")
+local packet = {dis = original, track = {private = function() end, lua_state = {private = true}}}
 assert(solovey_managed_0_0(nil, packet) == VERDICT_PASS)
-assert(packet.track.seen == nil)
-assert(solovey_managed_0_1(nil, packet) == VERDICT_DROP)
+assert(packet.track.seen == nil and packet.track.lua_state.seen == nil)
+assert(solovey_managed_0_1(nil, packet) == (VERDICT_MODIFY | VERDICT_PRESERVE_NEXT))
+assert(original.payload == "old" and packet.dis.payload == "new")
+assert(dissect(reconstruct_dissect(packet.dis)).payload == "new")
+local committed = packet.dis
+for index = 2, 6 do
+    assert(_G["solovey_managed_0_" .. index](nil, packet) == VERDICT_DROP)
+    assert(packet.dis == committed and packet.dis.payload == "new")
+end
 assert(not pcall(solovey_bind, "invalidtest", "missing_function"))
 print("MANAGED_LUA_CALLBACKS_VERIFIED")
 os.exit(0) -- The no-intercept engine otherwise waits in its timer loop.
 `
-	fd, err := unix.MemfdCreate("solovey-test-zapret-lua", unix.MFD_CLOEXEC|unix.MFD_ALLOW_SEALING)
-	if err != nil {
-		t.Fatal(err)
-	}
-	file := os.NewFile(uintptr(fd), "solovey-test-zapret-lua")
-	defer file.Close()
-	if _, err := file.WriteString(program); err != nil {
-		t.Fatal(err)
-	}
-	if err := file.Chmod(0o444); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := unix.FcntlInt(file.Fd(), unix.F_ADD_SEALS, unix.F_SEAL_SEAL|unix.F_SEAL_SHRINK|unix.F_SEAL_GROW|unix.F_SEAL_WRITE); err != nil {
-		t.Fatal(err)
-	}
+	file := sealedEngineLua(t, program)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, filepath.Join(root, "nfqws2"), "--intercept=0", "--uid=65534:65534", "--lua-init=@/proc/self/fd/3",
@@ -198,6 +216,134 @@ os.exit(0) -- The no-intercept engine otherwise waits in its timer loop.
 	if err != nil || !strings.Contains(string(out), "MANAGED_LUA_CALLBACKS_VERIFIED") || !strings.Contains(string(out), "managed Lua action failed") {
 		t.Fatalf("nfqws2 managed source: %v\n%s", err, out)
 	}
+}
+
+func TestPinnedEngineAppliesManagedLuaVerdicts(t *testing.T) {
+	root, parent := os.Getenv("SOLOVEY_TEST_ENGINE_ROOT"), os.Getenv("SOLOVEY_TEST_PARENT_NETNS")
+	if root == "" || parent == "" {
+		t.Skip("requires the pinned engine and a disposable network namespace")
+	}
+	current, err := os.Readlink("/proc/self/ns/net")
+	initNS, initErr := os.Readlink("/proc/1/ns/net")
+	links, linkErr := net.Interfaces()
+	if err != nil || initErr != nil || current == parent || current == initNS || linkErr != nil || len(links) != 1 || links[0].Name != "lo" {
+		t.Fatal("refusing to install a managed Lua test queue outside a disposable loopback-only namespace")
+	}
+	listener, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	addr := listener.LocalAddr().(*net.UDPAddr)
+	const source = `function edit(ctx, desync)
+    if not desync.outgoing then return end
+    if desync.dis.payload == "reject" then
+        desync.dis.udp.uh_dport = desync.dis.udp.uh_dport + 1
+    else
+        desync.dis.payload = desync.dis.payload:upper()
+    end
+    return VERDICT_MODIFY
+end`
+	lua := LuaDraft{Origin: "administrator", Source: source}
+	native := fmt.Sprintf("--filter-udp=%d --payload=all --lua-desync=edit", addr.Port)
+	catalog := Catalog{Schema: CatalogSchema, Records: map[string]Record{}, LuaDrafts: map[string]LuaDraft{"operator": lua}}
+	refs := []LuaReference{{ID: "operator", Revision: lua.Revision()}}
+	record, err := catalog.SealDraft(Draft{ID: "managed-edit", Name: "Managed edit", Raw: &native, ManagedLua: refs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	modules, err := catalog.SelectedLua(refs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const queue, mark, loop = 323, 0x120000, 0x40000000
+	args, _, program, err := CompileManagedBindings(root, "/proc/self/fd/3", queue, loop, []MarkedStrategy{{Strategy: record.Definition, QueueMark: mark}},
+		[][]LuaModule{modules}, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	engine := exec.CommandContext(t.Context(), filepath.Join(root, "nfqws2"), append([]string{"--uid=65534:65534"}, args...)...)
+	engine.Dir, engine.Stdout, engine.Stderr = root, &output, &output
+	engine.ExtraFiles = []*os.File{sealedEngineLua(t, program)}
+	if err := engine.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = engine.Process.Kill()
+		_ = engine.Wait()
+		if t.Failed() {
+			t.Log(output.String())
+		}
+	})
+	waitForQueueCondition(t, func() bool { _, bound := queueDrops(t, queue); return bound })
+	nft := exec.CommandContext(t.Context(), "nft", "-f", "-")
+	nft.Stdin = strings.NewReader(fmt.Sprintf(`add table inet zapret_managed_fixture
+add chain inet zapret_managed_fixture output { type filter hook output priority 0; policy accept; }
+add rule inet zapret_managed_fixture output oifname "lo" ip daddr 127.0.0.1 udp dport %d queue num %d
+`, addr.Port, queue))
+	if out, err := nft.CombinedOutput(); err != nil {
+		t.Fatalf("install isolated fixture queue: %v\n%s", err, out)
+	}
+	for _, tc := range []struct {
+		mark       int
+		send, want string
+	}{{0, "unchanged", "unchanged"}, {mark, "edit", "EDIT"}, {mark, "reject", ""}, {mark, "recover", "RECOVER"}} {
+		client, err := net.DialUDP("udp4", nil, addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.Close()
+		raw, err := client.SyscallConn()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var markErr error
+		if err := raw.Control(func(fd uintptr) {
+			markErr = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_MARK, tc.mark)
+		}); err != nil || markErr != nil {
+			t.Fatalf("fixture mark: %v; %v", err, markErr)
+		}
+		if _, err := client.Write([]byte(tc.send)); err != nil {
+			t.Fatal(err)
+		}
+		_ = listener.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		var received [32]byte
+		n, from, err := listener.ReadFromUDP(received[:])
+		if tc.want == "" {
+			if !os.IsTimeout(err) {
+				t.Fatalf("rejected edit reached peer: %q, %v", received[:n], err)
+			}
+			continue
+		}
+		if err != nil || string(received[:n]) != tc.want || from.Port != client.LocalAddr().(*net.UDPAddr).Port {
+			t.Fatalf("receiving %q from admitted flow: got %q from %v, %v", tc.want, received[:n], from, err)
+		}
+	}
+	if _, bound := queueDrops(t, queue); !bound {
+		t.Fatal("the managed runtime lost its queue")
+	}
+	t.Log("native managed packet edit, unselected path, rejection and recovery verified")
+}
+
+func sealedEngineLua(t *testing.T, program string) *os.File {
+	t.Helper()
+	fd, err := unix.MemfdCreate("solovey-test-zapret-lua", unix.MFD_CLOEXEC|unix.MFD_ALLOW_SEALING)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := os.NewFile(uintptr(fd), "solovey-test-zapret-lua")
+	t.Cleanup(func() { _ = file.Close() })
+	if _, err := file.WriteString(program); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Chmod(0o444); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := unix.FcntlInt(file.Fd(), unix.F_ADD_SEALS, unix.F_SEAL_SEAL|unix.F_SEAL_SHRINK|unix.F_SEAL_GROW|unix.F_SEAL_WRITE); err != nil {
+		t.Fatal(err)
+	}
+	return file
 }
 
 func validateEngineArgs(t *testing.T, root string, argv []string) {

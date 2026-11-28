@@ -6,7 +6,7 @@ local base = {}
 for _, name in ipairs({
     "assert", "error", "ipairs", "next", "pairs", "pcall", "rawequal", "rawget",
     "rawlen", "rawset", "select", "setmetatable", "tonumber", "tostring", "type", "xpcall",
-    "VERDICT_PASS", "VERDICT_DROP",
+    "VERDICT_PASS", "VERDICT_MODIFY", "VERDICT_DROP", "VERDICT_MASK", "VERDICT_PRESERVE_NEXT",
 }) do
     base[name] = engine[name]
 end
@@ -106,19 +106,62 @@ local function action_view(desync)
     return view
 end
 
+local function same_pair(before, after, a, b)
+    if before == nil or after == nil then return before == after end
+    return before[a] == after[a] and before[b] == after[b]
+end
+
+local function same_flow(before, after)
+    return before.l4proto == after.l4proto and before.frag_off == after.frag_off
+        and same_pair(before.ip, after.ip, "ip_src", "ip_dst")
+        and same_pair(before.ip6, after.ip6, "ip6_src", "ip6_dst")
+        and same_pair(before.tcp, after.tcp, "th_sport", "th_dport")
+        and same_pair(before.udp, after.udp, "uh_sport", "uh_dport")
+end
+
+local function finish_action(desync, view, ...)
+    local verdict = ...
+    if select("#", ...) > 1 then error("multiple packet verdicts") end
+    if verdict == nil then return nil end
+    if math.type(verdict) ~= "integer" or verdict & ~(VERDICT_MASK | VERDICT_PRESERVE_NEXT) ~= 0 then
+        error("invalid packet verdict")
+    end
+    local action = verdict & VERDICT_MASK
+    if action == VERDICT_MODIFY then
+        -- nfqws2 reconstructs from its own dissect table outside the callback.
+        -- Validate a plain copy first; never publish a script-owned reference.
+        local original = desync.dis
+        local edited = packet_view(rawget(view, "dis"), {})
+        local preserve = verdict & VERDICT_PRESERVE_NEXT ~= 0
+        local wire = reconstruct_dissect(edited, {ip6_preserve_next = preserve})
+        if not same_flow(original, dissect(wire)) then error("packet edit changes the admitted flow") end
+        -- Another action in this IPv6 chain can set the aggregate preserve flag.
+        if original.ip6 and not preserve then
+            local preserved = reconstruct_dissect(edited, {ip6_preserve_next = true})
+            if not same_flow(original, dissect(preserved)) then error("packet edit changes the admitted flow") end
+        end
+        desync.dis = edited
+    elseif action ~= VERDICT_PASS and action ~= VERDICT_DROP then
+        error("invalid packet verdict")
+    end
+    return verdict
+end
+
 local function solovey_bind(entry, name)
     local callback = rawget(env, name)
     if type(callback) ~= "function" then error("managed Lua function not found: " .. name) end
     if engine[entry] ~= nil then error("duplicate managed Lua entry") end
     local reported = false
+    local function run(ctx, desync)
+        local view = action_view(desync)
+        return finish_action(desync, view, callback(ctx, view))
+    end
     engine[entry] = function(ctx, desync)
-        local ok, verdict = pcall(callback, ctx, action_view(desync))
-        if ok and (verdict == nil or verdict == VERDICT_PASS or verdict == VERDICT_DROP) then
-            return verdict
-        end
+        local ok, verdict = pcall(run, ctx, desync)
+        if ok then return verdict end
         if not reported then
             reported = true
-            DLOG_ERR("managed Lua action failed or returned an unsupported verdict: " .. name)
+            DLOG_ERR("managed Lua action failed, returned an invalid verdict or produced an invalid packet edit: " .. name)
         end
         return VERDICT_DROP
     end
