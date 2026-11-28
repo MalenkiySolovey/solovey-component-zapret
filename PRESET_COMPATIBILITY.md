@@ -45,10 +45,12 @@ libraries byte for byte. Solovey obtains those libraries from Zapret2.
 The signature establishes release provenance for the five additional GUI Lua
 files and the list and binary assets. The manifest provides no per-file
 license metadata, and redistribution rights for these additional dependencies
-remain unconfirmed. Two base lists exceed the one-package 256 KiB transfer
-budget individually. `ipset-all.txt` is 572,927 bytes and `russia-blacklist.txt` is
-1,773,215 bytes. The frozen distribution adds no runnable originals to the
-catalog under the current runtime and transfer contracts.
+remain unconfirmed. The two largest observed base lists, `ipset-all.txt`
+(572,927 bytes) and `russia-blacklist.txt` (1,773,215 bytes), must be evaluated
+against the compressed transfer and expanded workspace budgets separately.
+A list fitting on its own does not qualify its whole preset or permit
+redistribution. No exact Windows launch document ships as a runnable Linux
+preset.
 
 The running Windows Dev build inspected separately reported `21.1.7.313`
 in both the UI and executable properties, SHA-256
@@ -63,7 +65,7 @@ compared in source. No strategy, probe or network setting was activated.
 | Frozen feature family | Disposition and owner |
 | --- | --- |
 | Preset catalog, grouping, clone, ordering, raw review | Adopted into the Component's existing Strategy catalog and shared UI. Importing an adapted template creates a new Strategy with the immutable template ID, reference version/commit and SHA-256 of the template text. Later edits retain that origin independently of the runtime revision. |
-| `--new`, `--name`, positive `--filter-tcp/udp`, single or dual `--filter-l3` | Admitted with stable managed IDs, original profile order and finite, explicit transport scope. Combined TCP/UDP stays in one native profile and exposes separate TCP and UDP ports or inclusive ranges in the shared editor. Wide scopes stay compact from native parsing through Host intent. The family and list filters apply to the whole profile. Wildcards and negative port filters still lack a qualified positive admission scope; Circular retains its TCP-only return path. |
+| `--new`, `--name`, `--filter-tcp/udp`, single or dual `--filter-l3` | Admitted with stable managed IDs, original profile order and finite, explicit transport scope. The parser maps `*` and `~port` or `~first-last` to the same positive intervals for Host admission and engine compilation. As in nfqws2, comma-separated terms are alternatives, port 0 never matches, and a wholly empty scope cannot become an active profile. Native text is retained; visual editors use inclusive intervals. The family and list filters apply to the whole profile. Circular retains its TCP-only return path. |
 | `--filter-l7`, `--payload`, `--in-range`, `--out-range` and `--lua-desync` | A native-only passive profile can use independent L7 selectors from the pinned engine. Its standalone original `pass` action can retain a native payload selector and bounded outgoing range. Neither transforms packets, and an earlier matching passive profile can still preempt a later action. Transforming actions retain the typed TLS/HTTP/QUIC payload contracts: split, ordered HTTP, bounded QUIC and Circular with its qualified return path. Managed Lua actions can be interleaved with one qualified built-in or ordered HTTP action; the source order, payload snapshots and outgoing ranges are preserved through the typed definition and compiled argv. Circular's incoming return-path range remains separate and cannot contain managed callbacks. Other action chains and incoming range variants stay inert; options are not stripped. |
 | `--hostlist-domains`, `--ipset-ip` and corresponding exclusions | Admitted as typed include/exclude filters. File-backed `--hostlist`/`--ipset` and exclusions can map one managed list per slot from `lists/<id>.txt` or existing matching content. No external files, automatic lists or wildcard path resolution. |
 | `--blob`, fake assets, native named data | Inline hex or packaged `blobs/<id>.hex` or `blobs/<id>.bin` can map to a managed QUIC asset only when consumed by an admitted action. Matching IDs are reused; different content is a conflict. A custom blob still requires the existing installed Host permission. This does not import the GUI's packaged fake catalog. |
@@ -84,7 +86,7 @@ compared in source. No strategy, probe or network setting was activated.
 | Native review and authoring | 64 KiB per native import text entry; the editor uses its bounded request envelope. Raw text, including comments, does not enter activation. |
 | Definition and packet scope | Activated definitions share the authenticated broker request byte and JSON shape budgets with the rest of the selected batch. Scopes of up to 64 ports retain the legacy representation; larger positive scopes use disjoint inclusive intervals. Runtime argv and nft transaction budgets still apply. |
 | Installed argv | On Linux the compiler reads the launcher's soft `RLIMIT_STACK`, uses the kernel's aggregate and per-string allowances, and reserves space for broker flags, the executable path and environment. Preview off Linux still uses the conservative Linux floor. This is an exec boundary, not a measurement of engine memory or available queue capacity. |
-| Lists | Native inline and managed lists retain canonical entry validation. The selected aggregate must fit the actual broker frame and compiled argument budgets; there is no 2 KiB strategy-wide list limit. |
+| Lists | Native inline and managed lists retain canonical entry validation. With the list-file-capable broker, selected managed data fits the authenticated frame and materialization workspace before being compiled as private files rather than inline arguments. Inactive lists do not enter this budget. |
 | QUIC assets | 1,200 bytes per custom QUIC Initial blob with existing Host authorization. Selected bytes count toward the broker and engine budgets; inactive blobs are persisted only. |
 | Lua source | 256 KiB per source upload. Only selected exact revisions contribute to the activation request and the native loader. |
 
@@ -128,13 +130,17 @@ The pinned `zapret-lib.lua`, `zapret-antidpi.lua` and `zapret-auto.lua`
 remain on their existing qualified paths. At the pinned engine commit,
 `nfq2/nfqws.c` drops UID before initializing Lua; `nfq2/sec.c` retains
 `CAP_NET_ADMIN` and `CAP_NET_RAW`. `nfq2/lua.c` opens the standard libraries
-and supplies native packet APIs in that same process. A file's author or a
-successful syntax check cannot isolate it from that authority. Unpinned
-code cannot be loaded or evaluated by the current runtime.
+and supplies native packet APIs in that same process. Authorship and syntax
+checks do not confer execution authority. The broker admits only explicitly
+selected script revisions through the managed environment, without admitting
+arbitrary native initializers.
 
-The admin-only draft workflow supports create, edit, explicit UTF-8 source
-import, download and delete. Store origin and (for ZapretGUI or third-party
-source) a version, source or unknown-origin note. Import does not run or
-fetch anything. Drafts share the existing catalog revision and backup data;
-Strategy transfers do not carry them. No ZapretGUI library is bundled or
-declared compatible on the basis of the GUI's repository license.
+The administrator can create, edit, explicitly import, download and delete
+managed UTF-8 sources. Store origin and (for ZapretGUI or third-party source)
+a version, reference or unknown-origin note. Import does not run or fetch
+anything. Activation selects exact revisions and load order; imported sources
+also require explicit execution consent and Host delegation. The managed
+environment does not provide host file loaders or unselected modules.
+Strategy transfers carry selected dependencies without carrying consent. No
+ZapretGUI library is bundled or declared compatible solely on the basis of
+the GUI repository's license.

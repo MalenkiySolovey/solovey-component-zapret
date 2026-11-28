@@ -46,11 +46,59 @@ func TestNativeRangesPreserveSourceProfileOrderAndExactPorts(t *testing.T) {
 	}
 }
 
-func TestNativeRangesRejectUnboundedOrMalformedPorts(t *testing.T) {
-	for _, input := range []string{"*", "~443", "0-2", "443-42", "65535-65536", "443-444-445", "443,"} {
+func TestNativeRangesRejectEmptyOrMalformedPorts(t *testing.T) {
+	for _, input := range []string{"0", "~0", "~0-65535", "~1-65535", "~*", "443-42", "65535-65536", "443-444-445", "443,", "*,bad"} {
 		if _, err := ParseNative("fixture", "--filter-tcp="+input); !errors.Is(err, ErrInvalidStrategy) {
 			t.Errorf("accepted invalid or ambiguous port filter %q: %v", input, err)
 		}
+	}
+}
+
+func TestNativePortFiltersProjectExactPositiveScope(t *testing.T) {
+	for _, tt := range []struct{ raw, equivalent string }{
+		{"--filter-udp=*", "--filter-udp=1-65535"},
+		{"--filter-tcp=~443", "--filter-tcp=1-442,444-65535"},
+		{"--filter-tcp=~80-82,81", "--filter-tcp=1-79,81,83-65535"},
+		{"--filter-udp=~1,~65535", "--filter-udp=1-65535"},
+		{"--filter-udp=~0-2,0", "--filter-udp=3-65535"},
+		{"--filter-tcp=0-2,~0,~4-65535 --filter-udp=~1-65535", "--filter-tcp=1-3"},
+		{"--filter-udp=443 --filter-tcp=0", "--filter-udp=443"},
+		{"--filter-tcp=~1-65535 --filter-udp=443", "--filter-udp=443"},
+		{"--filter-udp=~53 --filter-tcp=*", "--filter-tcp=1-65535 --filter-udp=1-52,54-65535"},
+	} {
+		t.Run(tt.raw, func(t *testing.T) {
+			_, review, err := emptyPresetCatalog().PreparePreset("fixture", PresetInput{Format: "native", Content: []byte(tt.raw)})
+			if err != nil || review.Record == nil || review.Record.Raw != tt.raw {
+				t.Fatalf("admission lost native source: %+v: %v", review, err)
+			}
+			record := *review.Record
+			want, err := ParseNative(record.Definition.ID, tt.equivalent)
+			if err != nil || record.Definition.Revision != want.Revision {
+				t.Fatalf("wrong sealed profiles: %+v, expected %+v: %v", record.Definition.Profiles, want.Profiles, err)
+			}
+			argv, err := record.Definition.Compile("/opt/zapret2", 401, 0x120000, 0x40000000)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantArgs, err := want.Compile("/opt/zapret2", 401, 0x120000, 0x40000000)
+			if err != nil || !slices.Equal(argv, wantArgs) {
+				t.Fatalf("wrong compiled filters: %v, expected %v: %v", argv, wantArgs, err)
+			}
+			exported, err := record.Export().Import()
+			if err != nil || exported.Raw == nil || *exported.Raw != tt.raw {
+				t.Fatalf("transfer lost native source: %+v: %v", exported, err)
+			}
+		})
+	}
+	value, err := ParseNative("fixture", "--filter-tcp=~80-82,81 --filter-udp=*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope, err := value.PacketScope()
+	if err != nil || len(scope.TCP) != 0 || len(scope.UDP) != 0 ||
+		!slices.Equal(scope.TCPRanges, []intent.PortInterval{{First: 1, Last: 79}, {First: 81, Last: 81}, {First: 83, Last: 65535}}) ||
+		!slices.Equal(scope.UDPRanges, []intent.PortInterval{{First: 1, Last: 65535}}) {
+		t.Fatalf("Host scope lost or expanded native ports: %+v: %v", scope, err)
 	}
 }
 
