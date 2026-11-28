@@ -47,8 +47,11 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 		if current.outRangePending {
 			return fmt.Errorf("%w: --out-range needs a following action in native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
 		}
+		if current.Protocol == "" {
+			return fmt.Errorf("%w: native profile %d requires a nonempty TCP or UDP destination port scope (1-65535)", ErrInvalidStrategy, len(value.Profiles)+1)
+		}
 		if len(current.LuaActions) != 0 && current.hasNonManagedAction() {
-			if current.Protocol == "" || current.inRange != "" {
+			if current.inRange != "" {
 				return fmt.Errorf("%w: managed Lua cannot be combined with an incoming-range or Circular return-path action", ErrInvalidStrategy)
 			}
 			current.Payload, current.L7Filter = "", current.l7
@@ -57,14 +60,14 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 			return nil
 		}
 		if len(current.LuaActions) != 0 {
-			if current.Protocol == "" || current.inRange != "" {
+			if current.inRange != "" {
 				return fmt.Errorf("%w: managed Lua requires an admitted outgoing TCP or UDP profile", ErrInvalidStrategy)
 			}
 			current.Payload, current.L7Filter = "", current.l7
 			value.Profiles = append(value.Profiles, current.Profile)
 			return nil
 		}
-		if current.Protocol == "" || !current.Pass && current.seen["--payload"] != current.seen["--lua-desync"] ||
+		if !current.Pass && current.seen["--payload"] != current.seen["--lua-desync"] ||
 			!current.Pass && current.hasAction() && (current.l7 == "" || payloadProtocol(current.Payload) != current.l7) ||
 			current.inRange != "" && current.Circular == nil {
 			return fmt.Errorf("%w: incomplete or inconsistent native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
@@ -123,6 +126,10 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 			ports, err := parseNativePorts(input, protocol)
 			if err != nil {
 				return Strategy{}, token.invalid(err)
+			}
+			// The engine denies an omitted transport when another is specified.
+			if len(ports) == 0 {
+				continue
 			}
 			switch {
 			case current.Protocol == "":
@@ -272,18 +279,38 @@ func builtInLuaAction(input string) bool {
 }
 
 func parseNativePorts(input string, protocol intent.PacketProtocol) ([]intent.PortInterval, error) {
+	const maxPort = 1<<16 - 1
 	var ports []intent.PortInterval
 	for field := range strings.SplitSeq(input, ",") {
+		if field == "*" {
+			ports = append(ports, intent.PortInterval{First: 1, Last: maxPort})
+			continue
+		}
+		field, negated := strings.CutPrefix(field, "~")
 		first, last, ranged := strings.Cut(field, "-")
 		if !ranged {
 			last = first
 		}
 		low, lowErr := strconv.ParseUint(first, 10, 16)
 		high, highErr := strconv.ParseUint(last, 10, 16)
-		if lowErr != nil || highErr != nil || low == 0 || high < low {
-			return nil, fmt.Errorf("%w: %s filter requires positive port numbers or inclusive ranges", ErrInvalidStrategy, protocol)
+		if lowErr != nil || highErr != nil || high < low {
+			return nil, fmt.Errorf("%w: %s filter requires ports or inclusive ranges in 0-65535, optionally prefixed with ~, or *", ErrInvalidStrategy, protocol)
 		}
-		ports = append(ports, intent.PortInterval{First: uint16(low), Last: uint16(high)})
+		// nfqws2 ORs the filters and never matches port zero. A zero-only
+		// term denies all even when written with a tilde.
+		if high == 0 {
+			continue
+		}
+		if negated {
+			if low > 1 {
+				ports = append(ports, intent.PortInterval{First: 1, Last: uint16(low - 1)})
+			}
+			if high < maxPort {
+				ports = append(ports, intent.PortInterval{First: uint16(high + 1), Last: maxPort})
+			}
+			continue
+		}
+		ports = append(ports, intent.PortInterval{First: uint16(max(low, 1)), Last: uint16(high)})
 	}
 	return ports, nil
 }

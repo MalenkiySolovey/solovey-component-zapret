@@ -110,6 +110,11 @@ func TestPinnedEngineValidatesProfiles(t *testing.T) {
 		text := "--filter-tcp=80,40000-46000,65534-65535 --filter-udp=3478-19302"
 		validatePresetEngine(t, root, PresetInput{Format: "native", Content: []byte(text)})
 	})
+	t.Run("native-wildcard-and-negated-ports", func(t *testing.T) {
+		text := "--filter-tcp=~80-82,81 --filter-udp=*"
+		validateEngineArgs(t, root, []string{"--qnum=401", "--filter-tcp=~80-82,81", "--filter-udp=*"})
+		validatePresetEngine(t, root, PresetInput{Format: "native", Content: []byte(text)})
+	})
 	t.Run("native-passive-and-pass", func(t *testing.T) {
 		validatePresetEngine(t, root, PresetInput{Format: "native", Content: []byte(nativePassiveFixture)})
 	})
