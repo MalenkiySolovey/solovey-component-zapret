@@ -20,11 +20,12 @@ const (
 	MaxPresetTransferBytes = 3 * ((1 << 20) / 4) // 1 MiB base64 field; HTTP framing has a separate budget.
 	// Frozen ZapretGUI portable archive limits. The caller may grant less
 	// workspace, independently of the compressed transport and active engine.
-	MaxPresetExpandedBytes     = 128 << 20
-	maxPresetMemberBytes       = 32 << 20
-	DefaultPresetExpandedBytes = 6 << 20
-	MaxNativeReviewBytes       = 64 << 10
-	maxPresetEntries           = 128
+	MaxPresetExpandedBytes      = 128 << 20
+	maxPresetMemberBytes        = 32 << 20
+	DefaultPresetExpandedBytes  = 6 << 20
+	MaxNativeReviewBytes        = 64 << 10
+	maxPresetEntries            = 128
+	compactPresetTransferSchema = "solovey.zapret-transfer/v2"
 )
 
 // ExportPackage carries the exact existing transfer, including shared IDs
@@ -38,12 +39,18 @@ func (c Catalog) ExportPackageWithin(id string, expandedBytes int) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
+	transfer = transfer.compactPresetLists()
 	data, err := json.Marshal(transfer)
 	if err != nil {
 		return nil, err
 	}
 	if limit := min(maxPresetMemberBytes, presetExpansionLimit(expandedBytes)); len(data) > limit {
 		return nil, fmt.Errorf("strategy.json needs %d bytes; ZIP file or expansion budget is %d bytes; use a catalog backup", len(data), limit)
+	}
+	if transfer.Schema == compactPresetTransferSchema {
+		if err := transfer.checkPresetListBudget(presetExpansionLimit(expandedBytes) - len(data)); err != nil {
+			return nil, err
+		}
 	}
 	var output bytes.Buffer
 	archive := zip.NewWriter(&output)
@@ -61,6 +68,66 @@ func (c Catalog) ExportPackageWithin(id string, expandedBytes int) ([]byte, erro
 		return nil, fmt.Errorf("compressed preset needs %d bytes; transfer limit is %d bytes; use a catalog backup", output.Len(), MaxPresetTransferBytes)
 	}
 	return output.Bytes(), nil
+}
+
+// A ZIP transfer stores shared list entries once, not again in every profile.
+// Its revision still refers to the complete definition after rehydration.
+func (t Transfer) compactPresetLists() Transfer {
+	if len(t.Strategy.ListRefs) == 0 {
+		return t
+	}
+	t.Schema = compactPresetTransferSchema
+	t.Strategy.Definition.Profiles = slices.Clone(t.Strategy.Definition.Profiles)
+	for i := range t.Strategy.Definition.Profiles {
+		profile := &t.Strategy.Definition.Profiles[i]
+		refs, referenced := t.Strategy.ListRefs[profile.ID]
+		if !referenced || profile.Lists == nil {
+			continue
+		}
+		lists := *profile.Lists
+		fields := lists.fields()
+		for index, id := range refs.ids() {
+			if id != "" {
+				*fields[index].entries = nil
+			}
+		}
+		if len(lists.HostList)+len(lists.HostListExclude)+len(lists.IPSet)+len(lists.IPSetExclude) == 0 {
+			profile.Lists = nil
+		} else {
+			profile.Lists = &lists
+		}
+	}
+	return t
+}
+
+func (t Transfer) checkPresetListBudget(remaining int) error {
+	charges := make(map[string]int, len(t.Lists))
+	for _, refs := range t.Strategy.ListRefs {
+		for _, id := range refs.ids() {
+			if id == "" {
+				continue
+			}
+			charge, ok := charges[id]
+			if !ok {
+				list, exists := t.Lists[id]
+				if !exists {
+					return fmt.Errorf("compact preset is missing native list %q", id)
+				}
+				// Allow for the field name and array framing. Valid hosts and
+				// prefixes are ASCII and need no JSON escaping.
+				charge = 32
+				for _, entry := range list.Entries {
+					charge += len(entry) + 3
+				}
+				charges[id] = charge
+			}
+			if charge > remaining {
+				return fmt.Errorf("native list %q needs %d projected bytes; %d remain in the preset expansion budget", id, charge, remaining)
+			}
+			remaining -= charge
+		}
+	}
+	return nil
 }
 
 func presetExpansionLimit(expandedBytes int) int {

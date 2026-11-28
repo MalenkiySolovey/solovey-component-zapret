@@ -73,7 +73,8 @@ func TestPresetPackageMapsDependenciesAndRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, input := range []PresetInput{{Format: "json", Content: jsonData}, {Format: "zip", Content: packaged}} {
+	legacyZIP := presetZIP(t, []zipSource{{name: "strategy.json", contents: string(jsonData)}})
+	for _, input := range []PresetInput{{Format: "json", Content: jsonData}, {Format: "zip", Content: legacyZIP}, {Format: "zip", Content: packaged}} {
 		restored, review, err := emptyPresetCatalog().PreparePreset("first", input)
 		if err != nil || review.Record == nil || restored.Revision() != next.Revision() {
 			t.Errorf("%s did not round-trip exact raw source, assets and definition: %+v, %v", input.Format, review, err)
@@ -199,7 +200,7 @@ func TestPresetLargeListTransferAndExpansionBudgets(t *testing.T) {
 	var domains strings.Builder
 	for i := range entries {
 		digest := sha256.Sum256(fmt.Appendf(nil, "%d", i))
-		fmt.Fprintf(&domains, "%x.fixture.example.test\n", digest[:8])
+		fmt.Fprintf(&domains, "%x.fixture.example.test\n", digest[:12])
 	}
 	archive := presetZIP(t, []zipSource{
 		{name: "strategy.txt", contents: "--filter-tcp=443 --hostlist=lists/large.txt"},
@@ -225,9 +226,30 @@ func TestPresetLargeListTransferAndExpansionBudgets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	files, err := readPresetPackage(backup, DefaultPresetExpandedBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compact, err := decodePresetTransfer(files["strategy.json"])
+	if err != nil || compact.Schema != compactPresetTransferSchema || compact.Strategy.Definition.Profiles[0].Lists != nil ||
+		len(compact.Lists["large"].Entries) != entries || next.Validate() != nil {
+		t.Fatalf("compact ZIP duplicated the selected list or modified the live definition: %v", err)
+	}
+	if _, _, err := base.PreparePresetWithin("large", PresetInput{Format: "zip", Content: backup}, len(files["strategy.json"])); err == nil || !strings.Contains(err.Error(), "expansion budget") {
+		t.Fatalf("compact ZIP was not charged for the restored list: %v", err)
+	}
 	restored, review, err := base.PreparePreset("large", PresetInput{Format: "zip", Content: backup})
 	if err != nil || review.Record == nil || restored.Revision() != next.Revision() {
 		t.Fatalf("ZIP round-trip lost the strategy or list revision: %v, %+v", err, review.Issues)
+	}
+	compact.Lists["large"].Entries[0] = "tampered.fixture.example.test"
+	modified, err := json.Marshal(compact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := presetZIP(t, []zipSource{{name: "strategy.json", contents: string(modified)}})
+	if _, preview, err := base.PreparePreset("large", PresetInput{Format: "zip", Content: tampered}); err == nil || !strings.Contains(err.Error(), "sealed strategy revision") || preview.Record != nil {
+		t.Fatalf("compact ZIP accepted different native list data: %v", err)
 	}
 	if _, _, err := base.PreparePreset("large", PresetInput{Format: "zip", Content: make([]byte, MaxPresetTransferBytes+1)}); err == nil ||
 		!strings.Contains(err.Error(), "transfer limit") {
