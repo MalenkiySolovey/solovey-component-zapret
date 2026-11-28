@@ -76,7 +76,7 @@ import { useI18n } from 'vue-i18n'
 import PresetOriginDetails from './PresetOriginDetails.vue'
 import { catalogError, encodePresetBytes, nativeReviewBytes, presetBytes, profilePorts, reviewPreset, savePreset, type CatalogView, type PresetInput, type PresetPreview, type PresetTemplate } from './catalog'
 
-const props = defineProps<{ revision: string; template?: PresetTemplate; templateLabel?: string }>()
+const props = defineProps<{ revision: string; template?: PresetTemplate; templateLabel?: string; transferLimit?: number }>()
 const emit = defineEmits<{ close: []; saved: [CatalogView] }>()
 const { t } = useI18n()
 const name = ref(props.templateLabel ?? '')
@@ -134,7 +134,7 @@ const review = () => run(async () => {
     const selected = file.value
     const suffix = selected?.name.split('.').at(-1)?.toLowerCase()
     const format = suffix === 'zip' ? 'zip' : suffix === 'json' ? 'json' : 'native'
-    const max = format === 'native' ? nativeReviewBytes : presetBytes
+    const max = format === 'native' ? nativeReviewBytes : props.transferLimit ?? presetBytes
     if (selected && selected.size > max) throw new Error(t('zapretCatalog.importTooLarge', { max: max / 1024 }))
     const content = selected ? new Uint8Array(await selected.arrayBuffer()) : new TextEncoder().encode(native.value)
     if (content.length > max) throw new Error(t('zapretCatalog.importTooLarge', { max: max / 1024 }))

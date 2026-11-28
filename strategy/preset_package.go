@@ -15,14 +15,25 @@ import (
 )
 
 const (
-	MaxPresetBytes       = 256 << 10 // Transfer and aggregate uncompressed ZIP data.
-	MaxNativeReviewBytes = 64 << 10
-	maxPresetEntries     = 128
+	// Legacy bounded JSON editor requests do not share the preset upload budget.
+	MaxPresetBytes         = 256 << 10
+	MaxPresetTransferBytes = 3 * ((1 << 20) / 4) // 1 MiB base64 field; HTTP framing has a separate budget.
+	// Frozen ZapretGUI portable archive limits. The caller may grant less
+	// workspace, independently of the compressed transport and active engine.
+	MaxPresetExpandedBytes     = 128 << 20
+	maxPresetMemberBytes       = 32 << 20
+	DefaultPresetExpandedBytes = 6 << 20
+	MaxNativeReviewBytes       = 64 << 10
+	maxPresetEntries           = 128
 )
 
 // ExportPackage carries the exact existing transfer, including shared IDs
 // and raw comments. It does not include engine code or filesystem paths.
 func (c Catalog) ExportPackage(id string) ([]byte, error) {
+	return c.ExportPackageWithin(id, DefaultPresetExpandedBytes)
+}
+
+func (c Catalog) ExportPackageWithin(id string, expandedBytes int) ([]byte, error) {
 	transfer, err := c.Export(id)
 	if err != nil {
 		return nil, err
@@ -30,6 +41,9 @@ func (c Catalog) ExportPackage(id string) ([]byte, error) {
 	data, err := json.Marshal(transfer)
 	if err != nil {
 		return nil, err
+	}
+	if limit := min(maxPresetMemberBytes, presetExpansionLimit(expandedBytes)); len(data) > limit {
+		return nil, fmt.Errorf("strategy.json needs %d bytes; ZIP file or expansion budget is %d bytes; use a catalog backup", len(data), limit)
 	}
 	var output bytes.Buffer
 	archive := zip.NewWriter(&output)
@@ -43,13 +57,17 @@ func (c Catalog) ExportPackage(id string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(data) > MaxPresetBytes || output.Len() > MaxPresetBytes {
-		return nil, errors.New("the Strategy does not fit the preset package budget; use a catalog backup")
+	if output.Len() > MaxPresetTransferBytes {
+		return nil, fmt.Errorf("compressed preset needs %d bytes; transfer limit is %d bytes; use a catalog backup", output.Len(), MaxPresetTransferBytes)
 	}
 	return output.Bytes(), nil
 }
 
-func readPresetPackage(data []byte) (map[string][]byte, error) {
+func presetExpansionLimit(expandedBytes int) int {
+	return max(0, min(expandedBytes, MaxPresetExpandedBytes))
+}
+
+func readPresetPackage(data []byte, expandedBytes int) (map[string][]byte, error) {
 	if !bytes.HasPrefix(data, []byte("PK\x03\x04")) {
 		return nil, errors.New("expected a data-only ZIP package")
 	}
@@ -62,7 +80,8 @@ func readPresetPackage(data []byte) (map[string][]byte, error) {
 		entryLimit = guiPresetEntryLimit
 	}
 	files := make(map[string][]byte, len(archive.File))
-	remaining := uint64(MaxPresetBytes)
+	budget := uint64(presetExpansionLimit(expandedBytes))
+	remaining := budget
 	for _, entry := range archive.File {
 		name := entry.Name
 		limit, ok := entryLimit(name)
@@ -72,8 +91,11 @@ func readPresetPackage(data []byte) (map[string][]byte, error) {
 		if _, duplicate := files[name]; duplicate {
 			return nil, fmt.Errorf("duplicate ZIP entry %q", name)
 		}
-		if entry.UncompressedSize64 > uint64(limit) || entry.UncompressedSize64 > remaining {
-			return nil, fmt.Errorf("ZIP entry %q exceeds its %d-byte file limit or the %d-byte aggregate limit", name, limit, MaxPresetBytes)
+		if entry.UncompressedSize64 > uint64(limit) {
+			return nil, fmt.Errorf("ZIP entry %q needs %d bytes; file limit is %d bytes", name, entry.UncompressedSize64, limit)
+		}
+		if entry.UncompressedSize64 > remaining {
+			return nil, fmt.Errorf("ZIP entry %q needs %d expanded bytes; %d of the %d-byte import workspace remains", name, entry.UncompressedSize64, remaining, budget)
 		}
 		input, err := entry.Open()
 		if err != nil {
@@ -94,12 +116,12 @@ func readPresetPackage(data []byte) (map[string][]byte, error) {
 func presetEntryLimit(name string) (int, bool) {
 	switch name {
 	case "strategy.json":
-		return MaxPresetBytes, true
+		return maxPresetMemberBytes, true
 	case "strategy.txt":
 		return MaxNativeReviewBytes, true
 	}
 	if presetAssetID(name, "lists/", ".txt") != "" {
-		return MaxPresetBytes, true
+		return maxPresetMemberBytes, true
 	}
 	if presetAssetID(name, "blobs/", ".hex") != "" {
 		return MaxNativeBlobBytes*2 + 2, true // Optional trailing newline.

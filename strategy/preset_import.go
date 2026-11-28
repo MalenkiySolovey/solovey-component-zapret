@@ -70,11 +70,17 @@ func (p *PresetPreview) issue(token *sourceToken, code, reason string) {
 // PreparePreset is used for both preview and commit. A rejected candidate
 // retains its inert source and never returns an updated Catalog.
 func (c Catalog) PreparePreset(id string, input PresetInput) (Catalog, PresetPreview, error) {
+	return c.PreparePresetWithin(id, input, DefaultPresetExpandedBytes)
+}
+
+// PreparePresetWithin uses the editing Host's ZIP workspace, not the
+// selected engine's activation budget or the total saved catalog size.
+func (c Catalog) PreparePresetWithin(id string, input PresetInput, expandedBytes int) (Catalog, PresetPreview, error) {
 	if err := c.Validate(); err != nil {
 		return Catalog{}, PresetPreview{}, err
 	}
-	if len(input.Content) > MaxPresetBytes {
-		return Catalog{}, PresetPreview{}, fmt.Errorf("preset has %d bytes; import limit is %d bytes", len(input.Content), MaxPresetBytes)
+	if len(input.Content) > MaxPresetTransferBytes {
+		return Catalog{}, PresetPreview{}, fmt.Errorf("preset has %d bytes; transfer limit is %d bytes", len(input.Content), MaxPresetTransferBytes)
 	}
 	dependencyIDs, err := input.dependencyMap()
 	if err != nil {
@@ -96,7 +102,7 @@ func (c Catalog) PreparePreset(id string, input PresetInput) (Catalog, PresetPre
 	case "json":
 		return c.prepareTransferPreset(id, input.Name, input.Content)
 	case "zip":
-		files, err := readPresetPackage(input.Content)
+		files, err := readPresetPackage(input.Content, expandedBytes)
 		if err != nil {
 			return Catalog{}, PresetPreview{}, err
 		}

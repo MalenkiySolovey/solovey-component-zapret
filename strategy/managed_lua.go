@@ -173,6 +173,12 @@ type luaBindings struct {
 func CompileManagedBindings(engineRoot, bundleFile string, queue uint16, loopMark uint32, bindings []MarkedStrategy,
 	sources [][]LuaModule, trace, returnPath bool,
 ) ([]string, *NativeTrace, string, error) {
+	return compileManagedBindings(engineRoot, bundleFile, queue, loopMark, bindings, sources, trace, returnPath, nil)
+}
+
+func compileManagedBindings(engineRoot, bundleFile string, queue uint16, loopMark uint32, bindings []MarkedStrategy,
+	sources [][]LuaModule, trace, returnPath bool, lists *nativeListFiles,
+) ([]string, *NativeTrace, string, error) {
 	if len(sources) != len(bindings) || !path.IsAbs(bundleFile) || path.Clean(bundleFile) != bundleFile ||
 		strings.ContainsAny(bundleFile, "\x00\r\n") {
 		return nil, nil, "", fmt.Errorf("%w: managed Lua requires a broker-owned bundle file and exact sources", ErrInvalidStrategy)
@@ -216,7 +222,7 @@ func CompileManagedBindings(engineRoot, bundleFile string, queue uint16, loopMar
 	if err != nil {
 		return nil, nil, "", err
 	}
-	argv, observations, err := compileBindingsWithLuaWithin(budget, engineRoot, queue, loopMark, bindings, trace, returnPath, &prepared)
+	argv, observations, err := compileBindingsWithLuaWithin(budget, engineRoot, queue, loopMark, bindings, trace, returnPath, &prepared, lists)
 	if err != nil {
 		return nil, nil, "", err
 	}

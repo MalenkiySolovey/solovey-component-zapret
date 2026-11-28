@@ -68,6 +68,7 @@ export interface CatalogView {
   engineCommit?: string
   storageUsed?: number
   luaSourceLimit?: number
+  presetTransferLimit?: number
   preferenceKey?: string
 }
 export interface PresetTemplate {

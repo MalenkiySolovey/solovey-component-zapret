@@ -3,6 +3,7 @@ package strategy
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -130,7 +131,7 @@ func TestPresetPackageRepairsListAndBinaryConflicts(t *testing.T) {
 		!slices.ContainsFunc(preview.Issues, func(issue PresetIssue) bool { return issue.Code == "unbound-dependency-id" }) {
 		t.Fatalf("unused explicit ID was silently ignored: %+v, %v", preview, err)
 	}
-	if _, err := readPresetPackage(presetBinaryFixture(t, strings.Repeat("x", MaxNativeBlobBytes+1))); err == nil {
+	if _, err := readPresetPackage(presetBinaryFixture(t, strings.Repeat("x", MaxNativeBlobBytes+1)), DefaultPresetExpandedBytes); err == nil {
 		t.Fatal("binary asset exceeded the bounded per-entry size")
 	}
 }
@@ -179,7 +180,7 @@ func TestPresetZIPAcceptsOnlyBoundedRegularDataFiles(t *testing.T) {
 	for _, extra := range []zipSource{
 		{name: "../strategy.txt"}, {name: "lists\\site.txt"}, {name: "lists/../../script.txt"}, {name: "Lists/site.txt"},
 		{name: "script.lua"}, {name: "lists/site.exe"}, {name: "lists/site.txt", mode: fs.ModeSymlink | 0777},
-		{name: "strategy.txt"}, {name: "lists/site.txt", contents: strings.Repeat("a", MaxPresetBytes+1)},
+		{name: "strategy.txt"}, {name: "lists/site.txt", contents: strings.Repeat("a", DefaultPresetExpandedBytes+1)},
 	} {
 		data := presetZIP(t, []zipSource{{name: "strategy.txt", contents: "--filter-tcp=443"}, extra})
 		_, review, err := emptyPresetCatalog().PreparePreset("invalid", PresetInput{Format: "zip", Content: data})
@@ -190,6 +191,47 @@ func TestPresetZIPAcceptsOnlyBoundedRegularDataFiles(t *testing.T) {
 	input := PresetInput{Format: "json", Content: []byte(`{"license":"MIT","License":"MIT"}`)}
 	if _, _, err := emptyPresetCatalog().PreparePreset("invalid", input); err == nil {
 		t.Fatal("case-folded duplicate transfer keys accepted")
+	}
+}
+
+func TestPresetLargeListTransferAndExpansionBudgets(t *testing.T) {
+	const entries = 33000
+	var domains strings.Builder
+	for i := range entries {
+		digest := sha256.Sum256(fmt.Appendf(nil, "%d", i))
+		fmt.Fprintf(&domains, "%x.fixture.example.test\n", digest[:8])
+	}
+	archive := presetZIP(t, []zipSource{
+		{name: "strategy.txt", contents: "--filter-tcp=443 --hostlist=lists/large.txt"},
+		{name: "lists/large.txt", contents: domains.String()},
+	})
+	if len(archive) <= MaxPresetBytes || domains.Len() <= len(archive) || len(archive) > MaxPresetTransferBytes {
+		t.Fatalf("fixture does not exercise independent budgets: compressed=%d, expanded list=%d", len(archive), domains.Len())
+	}
+	base := emptyPresetCatalog()
+	input := PresetInput{Format: "zip", Content: archive}
+	if _, preview, err := base.PreparePresetWithin("large", input, MaxPresetBytes); err == nil ||
+		!strings.Contains(err.Error(), "import workspace") || preview.Record != nil || len(base.Records) != 0 || len(base.Lists) != 0 {
+		t.Fatalf("a small ZIP workspace must reject without changing the catalog: %v", err)
+	}
+	next, preview, err := base.PreparePresetWithin("large", input, DefaultPresetExpandedBytes)
+	if err != nil || preview.Record == nil || len(next.Lists["large"].Entries) != entries || len(base.Records) != 0 {
+		t.Fatalf("large list was not imported intact: %v, %+v", err, preview.Issues)
+	}
+	if _, err := next.ExportPackageWithin("large", MaxPresetBytes); err == nil || !strings.Contains(err.Error(), "expansion budget") {
+		t.Fatalf("ZIP export must honor the expansion budget: %v", err)
+	}
+	backup, err := next.ExportPackage("large")
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, review, err := base.PreparePreset("large", PresetInput{Format: "zip", Content: backup})
+	if err != nil || review.Record == nil || restored.Revision() != next.Revision() {
+		t.Fatalf("ZIP round-trip lost the strategy or list revision: %v, %+v", err, review.Issues)
+	}
+	if _, _, err := base.PreparePreset("large", PresetInput{Format: "zip", Content: make([]byte, MaxPresetTransferBytes+1)}); err == nil ||
+		!strings.Contains(err.Error(), "transfer limit") {
+		t.Fatalf("oversized transfer must be rejected before opening ZIP: %v", err)
 	}
 }
 
