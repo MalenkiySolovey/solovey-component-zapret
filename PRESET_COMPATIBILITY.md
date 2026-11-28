@@ -80,7 +80,7 @@ compared in source. No strategy, probe or network setting was activated.
 | Resource | Limit and reason |
 | --- | --- |
 | Saved catalog (including unused lists, blobs and Lua revisions) | No aggregate 256 KiB product limit. Product stores component-owned records and materializes only selected sealed definitions and exact Lua revisions on activation. Backup retains its own transport and storage limits. |
-| Import transfer | 256 KiB input and 256 KiB total uncompressed ZIP data, at most 128 regular entries with per-entry limits. Only declared text forms and bounded opaque QUIC data; no extraction. Namespace/size checks happen before entries are read. |
+| Import transfer | The request carries up to 768 KiB of file data in a 1 MiB base64 field. ZIP expansion has a separate Host workspace budget and an upper envelope of 128 MiB total, 32 MiB per larger member, and 128 regular entries. Only declared data forms are read; no extraction. Compact transfers charge each restored list reference to the expansion budget. |
 | Native review and authoring | 64 KiB per native import text entry; the editor uses its bounded request envelope. Raw text, including comments, does not enter activation. |
 | Definition and packet scope | Activated definitions share the authenticated broker request byte and JSON shape budgets with the rest of the selected batch. Scopes of up to 64 ports retain the legacy representation; larger positive scopes use disjoint inclusive intervals. Runtime argv and nft transaction budgets still apply. |
 | Installed argv | On Linux the compiler reads the launcher's soft `RLIMIT_STACK`, uses the kernel's aggregate and per-string allowances, and reserves space for broker flags, the executable path and environment. Preview off Linux still uses the conservative Linux floor. This is an exec boundary, not a measurement of engine memory or available queue capacity. |
@@ -90,7 +90,10 @@ compared in source. No strategy, probe or network setting was activated.
 
 `strategy.txt` packages may also carry `lists/<id>.txt` and
 `blobs/<id>.hex` or `blobs/<id>.bin`; `strategy.json` packages contain only that file. Exported
-ZIP and JSON preserve the sealed record, raw text, and its dependencies.
+ZIP and JSON preserve the sealed record, raw text, and its dependencies. ZIP
+exports with named lists store the entries only once (transfer v2) and verify
+the sealed revision after restoring the references. Earlier v1 archives and
+standalone JSON remain readable.
 Import preserves the selected Lua sources and order, not their execution consent.
 Converted native source is shown alongside the original. Conversion only
 replaces accepted file/declaration dependencies with managed references;

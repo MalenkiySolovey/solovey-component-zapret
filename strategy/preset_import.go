@@ -100,7 +100,7 @@ func (c Catalog) PreparePresetWithin(id string, input PresetInput, expandedBytes
 	case "native":
 		return c.prepareNativeSource(id, input.Name, nativePresetSource{text: string(input.Content)})
 	case "json":
-		return c.prepareTransferPreset(id, input.Name, input.Content)
+		return c.prepareTransferPreset(id, input.Name, input.Content, expandedBytes)
 	case "zip":
 		files, err := readPresetPackage(input.Content, expandedBytes)
 		if err != nil {
@@ -113,7 +113,7 @@ func (c Catalog) PreparePresetWithin(id string, input PresetInput, expandedBytes
 			if len(input.DependencyIDs) != 0 {
 				return Catalog{}, PresetPreview{}, errors.New("dependency IDs cannot rewrite a sealed strategy transfer")
 			}
-			return c.prepareTransferPreset(id, input.Name, encoded)
+			return c.prepareTransferPreset(id, input.Name, encoded, expandedBytes)
 		}
 		if source, ok := files["strategy.txt"]; ok && files["strategy.json"] == nil {
 			delete(files, "strategy.txt")
@@ -155,10 +155,27 @@ func firstName(name, fallback string) string {
 	return fallback
 }
 
-func (c Catalog) prepareTransferPreset(id, name string, data []byte) (Catalog, PresetPreview, error) {
+func (c Catalog) prepareTransferPreset(id, name string, data []byte, expandedBytes int) (Catalog, PresetPreview, error) {
 	transfer, err := decodePresetTransfer(data)
 	if err != nil {
 		return Catalog{}, PresetPreview{}, err
+	}
+	if transfer.Schema == compactPresetTransferSchema {
+		if len(transfer.Strategy.ListRefs) == 0 {
+			return Catalog{}, PresetPreview{}, errors.New("compact preset has no native list references")
+		}
+		if err := transfer.checkPresetListBudget(presetExpansionLimit(expandedBytes) - len(data)); err != nil {
+			return Catalog{}, PresetPreview{}, err
+		}
+		expected := transfer.Strategy.Definition.Revision
+		record, err := (Catalog{Lists: transfer.Lists}).withResolvedLists(transfer.Strategy)
+		if err != nil {
+			return Catalog{}, PresetPreview{}, fmt.Errorf("restore compact preset lists: %w", err)
+		}
+		if record.Definition.Revision != expected {
+			return Catalog{}, PresetPreview{}, errors.New("compact preset does not reproduce the sealed strategy revision")
+		}
+		transfer.Schema, transfer.Strategy = TransferSchema, record
 	}
 	p := PresetPreview{Source: transfer.Strategy.Raw}
 	for key, list := range transfer.Lists {
