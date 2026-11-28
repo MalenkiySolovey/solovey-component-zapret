@@ -86,4 +86,35 @@ func nativeSource(text string) ([]sourceToken, error) {
 	return options, nil
 }
 
+// nativeProfileEnd finds the next --new boundary, starting inside a profile.
+func nativeProfileEnd(tokens []sourceToken, start int) int {
+	end := start + 1
+	for end < len(tokens) && tokens[end].text != "--new" && !strings.HasPrefix(tokens[end].text, "--new=") {
+		end++
+	}
+	return end
+}
+
+func nativeProfileSkipped(tokens []sourceToken) bool {
+	for _, token := range tokens {
+		if token.text == "--skip" {
+			return true
+		}
+	}
+	return false
+}
+
+// A skipped block may preserve profile data outside the active grammar.
+// Engine-wide directives keep their own scope even inside that block.
+func skippedNativeOption(key string, hasValue bool) bool {
+	switch key {
+	case "--skip":
+		return !hasValue
+	case "--cookie", "--filter-icmp", "--filter-ipp", "--filter-mark":
+		return hasValue
+	default:
+		return isProfileOption(key) || fileListKind(key) != ""
+	}
+}
+
 func sourceSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\r' }

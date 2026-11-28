@@ -15,6 +15,7 @@ type nativeDraft struct {
 	seen                  map[string]bool
 	actionOrder           []NativeActionRef
 	template              bool
+	skipped               bool
 	named                 bool
 	familySet             bool
 	inheritedActions      bool
