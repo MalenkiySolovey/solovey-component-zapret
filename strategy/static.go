@@ -363,11 +363,11 @@ func compileBindings(engineRoot string, queue uint16, loopMark uint32, bindings 
 }
 
 func compileBindingsWithin(budget engineArgBudget, engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy, trace, returnPath bool) ([]string, *NativeTrace, error) {
-	return compileBindingsWithLuaWithin(budget, engineRoot, queue, loopMark, bindings, trace, returnPath, nil)
+	return compileBindingsWithLuaWithin(budget, engineRoot, queue, loopMark, bindings, trace, returnPath, nil, nil)
 }
 
 func compileBindingsWithLuaWithin(budget engineArgBudget, engineRoot string, queue uint16, loopMark uint32, bindings []MarkedStrategy,
-	trace, returnPath bool, lua *luaBindings,
+	trace, returnPath bool, lua *luaBindings, lists *nativeListFiles,
 ) ([]string, *NativeTrace, error) {
 	if queue == 0 || loopMark == 0 || loopMark&(loopMark-1) != 0 || len(bindings) == 0 ||
 		!path.IsAbs(engineRoot) || path.Clean(engineRoot) != engineRoot || len(engineRoot) > 512 || strings.ContainsAny(engineRoot, "\x00\r\n") {
@@ -443,7 +443,7 @@ func compileBindingsWithLuaWithin(budget engineArgBudget, engineRoot string, que
 		if lua != nil {
 			entries = lua.entries[i]
 		}
-		args = appendProfiles(args, sealed, bindings[i].QueueMark, i, len(bindings) > 1, names, trace, entries)
+		args = appendProfiles(args, sealed, bindings[i].QueueMark, i, len(bindings) > 1, names, trace, entries, lists)
 		if err := budget.charge(&used, args[before:]); err != nil {
 			return nil, nil, err
 		}
@@ -455,7 +455,7 @@ func compileBindingsWithLuaWithin(budget engineArgBudget, engineRoot string, que
 	return args, observations, nil
 }
 
-func appendProfiles(args []string, value Strategy, mark uint32, binding int, groupNames bool, names map[string]string, trace bool, entries []string) []string {
+func appendProfiles(args []string, value Strategy, mark uint32, binding int, groupNames bool, names map[string]string, trace bool, entries []string, lists *nativeListFiles) []string {
 	for i, profile := range value.Profiles {
 		name := profile.ID
 		if groupNames {
@@ -470,7 +470,7 @@ func appendProfiles(args []string, value Strategy, mark uint32, binding int, gro
 		if profile.Family != "" {
 			args = append(args, "--filter-l3="+string(profile.Family))
 		}
-		args = profile.Lists.appendArgs(args)
+		args = lists.appendArgs(args, profile.Lists)
 		if profile.Circular != nil {
 			args = append(args, profile.circularArgs(fmt.Sprintf("%d/%d", binding+1, i+1), trace)...)
 			continue

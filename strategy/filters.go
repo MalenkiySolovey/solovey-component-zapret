@@ -3,12 +3,14 @@ package strategy
 import (
 	"fmt"
 	"net/netip"
+	"path"
 	"slices"
+	"strconv"
 	"strings"
 )
 
 // NativeLists are owned by the Strategy revision. They contain data, not
-// paths; the compiler only emits the engine's inline list options.
+// paths. Installed Hosts may materialize the same values as native files.
 type NativeLists struct {
 	HostList        []string `json:"hostList,omitempty"`
 	HostListExclude []string `json:"hostListExclude,omitempty"`
@@ -73,6 +75,41 @@ func (l *NativeLists) appendArgs(args []string) []string {
 				args = append(args, list.flag+"="+strings.Join(*list.entries, ","))
 			}
 		}
+	}
+	return args
+}
+
+type nativeListFiles struct {
+	directory string
+	refs      map[string]int
+	content   []string
+}
+
+func (f *nativeListFiles) appendArgs(args []string, lists *NativeLists) []string {
+	if f == nil {
+		return lists.appendArgs(args)
+	}
+	if lists == nil {
+		return args
+	}
+	flags := [...]string{"--hostlist", "--hostlist-exclude", "--ipset", "--ipset-exclude"}
+	for kind, list := range lists.fields() {
+		if len(*list.entries) == 0 {
+			continue
+		}
+		var text strings.Builder
+		for _, entry := range *list.entries {
+			text.WriteString(entry)
+			text.WriteByte('\n')
+		}
+		data := text.String()
+		index, exists := f.refs[data]
+		if !exists {
+			index = len(f.content)
+			f.refs[data] = index
+			f.content = append(f.content, data)
+		}
+		args = append(args, flags[kind]+"="+path.Join(f.directory, "list-"+strconv.Itoa(index)))
 	}
 	return args
 }
