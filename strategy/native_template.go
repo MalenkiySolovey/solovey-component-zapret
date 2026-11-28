@@ -10,6 +10,7 @@ import (
 type nativeDraft struct {
 	Profile
 	l7, inRange, outRange string
+	circularPayload       Payload
 	outRangePending       bool
 	seen                  map[string]bool
 	actionOrder           []NativeActionRef
@@ -59,6 +60,7 @@ func (d *nativeDraft) importTemplate(from nativeDraft) error {
 		d.inheritedActions = true
 		d.SplitAt, d.QUICRepeats, d.QUICBlobRef, d.Pass = from.SplitAt, from.QUICRepeats, from.QUICBlobRef, from.Pass
 		d.Payload, d.OutRange, d.inRange = from.Payload, from.OutRange, from.inRange
+		d.circularPayload = from.circularPayload
 		d.Circular, d.HTTPActions, d.LuaActions = from.Circular, from.HTTPActions, from.LuaActions
 		d.actionOrder = from.actionOrder
 		d.seen["--payload"], d.seen["--lua-desync"] = from.seen["--payload"], from.seen["--lua-desync"]

@@ -7,9 +7,9 @@ import (
 )
 
 // NativeActionRef records the source order of actions that are otherwise kept
-// in the legacy typed fields on Profile. Index refers to HTTPActions or
-// LuaActions; a built-in action uses Payload to snapshot the --payload value
-// that preceded it in the native source.
+// in the legacy typed fields on Profile. Index refers to HTTPActions,
+// LuaActions, or a Circular instance. Payload records the filter captured
+// when a built-in or Circular variant was added.
 type NativeActionRef struct {
 	Kind    string  `json:"kind"`
 	Index   int     `json:"index,omitempty"`

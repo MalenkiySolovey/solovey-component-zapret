@@ -70,13 +70,13 @@ jobs:
           # The engine loads Lua after dropping privileges. The runner's home
           # directory cannot serve as the installed engine root for that UID.
           engine=$(sudo mktemp -d /usr/local/lib/solovey-zapret-trace.XXXXXXXX)
-          trap 'sudo rm -f -- "$engine/nfqws2" "$engine/lua/zapret-lib.lua" "$engine/lua/zapret-antidpi.lua"; sudo rmdir -- "$engine/lua" "$engine"' EXIT
+          trap 'sudo rm -f -- "$engine/nfqws2" "$engine/lua/zapret-lib.lua" "$engine/lua/zapret-antidpi.lua" "$engine/lua/zapret-auto.lua"; sudo rmdir -- "$engine/lua" "$engine"' EXIT
           sudo install -d -m 0755 "$engine/lua"
           sudo install -m 0755 "$RUNNER_TEMP/nfqws2-a/nfqws2" "$engine/nfqws2"
-          sudo install -m 0644 "$RUNNER_TEMP/nfqws2-a/lua/"{zapret-lib,zapret-antidpi}.lua "$engine/lua/"
+          sudo install -m 0644 "$RUNNER_TEMP/nfqws2-a/lua/"{zapret-lib,zapret-antidpi,zapret-auto}.lua "$engine/lua/"
           sudo chmod 0755 "$engine"
           sudo unshare --net -- env SOLOVEY_TEST_PARENT_NETNS="$(readlink /proc/self/ns/net)" \
             SOLOVEY_TEST_ENGINE_ROOT="$engine" SOLOVEY_TEST_QUIC_INITIAL="$RUNNER_TEMP/quic-initial.bin" bash -euc '
               ip link set lo up
-              exec "$1" -test.run "^TestPinnedEngine(ReportsMatchedNativeProfiles|RunsManagedLua|AppliesManagedLuaVerdicts)$" -test.v -test.timeout=30s
+              exec "$1" -test.run "^TestPinnedEngine(ReportsMatchedNativeProfiles|RunsManagedLua|AppliesManagedLuaVerdicts|RunsManagedCircular)$" -test.v -test.timeout=30s
             ' _ "$RUNNER_TEMP/zapret-queue-test"
