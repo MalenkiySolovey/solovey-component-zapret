@@ -145,6 +145,13 @@ func Seal(value Strategy) (Strategy, error) {
 		}
 		profile.HTTPActions = slices.Clone(profile.HTTPActions)
 		profile.LuaActions = slices.Clone(profile.LuaActions)
+		if profile.Circular != nil {
+			for j := range profile.LuaActions {
+				if profile.LuaActions[j].Payload == "all" {
+					profile.LuaActions[j].Payload = ""
+				}
+			}
+		}
 		profile.ActionOrder = slices.Clone(profile.ActionOrder)
 		usesManagedLua = usesManagedLua || len(profile.LuaActions) != 0
 		if err := profile.sealOutRanges(); err != nil {
@@ -212,6 +219,9 @@ func (p Profile) validAction() bool {
 		return false
 	}
 	if len(p.ActionOrder) != 0 {
+		if p.Circular != nil {
+			return p.validCircularOrder()
+		}
 		return p.validOrderedAction()
 	}
 	switch {
@@ -472,7 +482,14 @@ func appendProfiles(args []string, value Strategy, mark uint32, binding int, gro
 		}
 		args = lists.appendArgs(args, profile.Lists)
 		if profile.Circular != nil {
-			args = append(args, profile.circularArgs(fmt.Sprintf("%d/%d", binding+1, i+1), trace)...)
+			slot := fmt.Sprintf("%d/%d", binding+1, i+1)
+			if len(profile.ActionOrder) != 0 {
+				count := len(profile.LuaActions)
+				args = profile.appendOrderedCircular(args, entries[:count], slot, trace)
+				entries = entries[count:]
+			} else {
+				args = append(args, profile.circularArgs(slot, trace)...)
+			}
 			continue
 		}
 		var observation string

@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/MalenkiySolovey/solovey-host/network/intent"
 )
 
 // Circular selects among ordered native TCP splits. The pinned engine owns
@@ -19,6 +21,8 @@ type Circular struct {
 const CircularReplyPacketLimit = 32
 
 const circularVariantRange = "x"
+
+const nativeActionCircular = "circular" // Index 0 is the orchestrator; 1..N are its ordered split variants.
 
 func circularObserveRange() string { return "-n" + strconv.Itoa(CircularReplyPacketLimit) }
 
@@ -69,15 +73,120 @@ end`
 
 func (p Profile) circularArgs(slot string, trace bool) []string {
 	args := []string{"--filter-l7=" + payloadProtocol(p.Payload), "--in-range=" + circularObserveRange()}
-	orchestrator := fmt.Sprintf("--lua-desync=circular:fails=%d", p.Circular.Failures)
+	args = append(args, p.Circular.orchestrator(slot), "--in-range="+circularVariantRange, "--payload="+string(p.Payload))
+	for i := range p.Circular.Splits {
+		args = p.Circular.appendSplit(args, i+1, slot, trace)
+	}
+	return args
+}
+
+func (c *Circular) orchestrator(slot string) string {
+	orchestrator := fmt.Sprintf("--lua-desync=circular:fails=%d", c.Failures)
 	if slot != "" {
 		orchestrator += ":key=solovey_" + slot + ":hostkey=solovey_circular_hostkey"
 	}
-	args = append(args, orchestrator, "--in-range="+circularVariantRange, "--payload="+string(p.Payload))
-	for i, position := range p.Circular.Splits {
-		args = append(args, fmt.Sprintf("--lua-desync=multisplit:pos=%d:strategy=%d", position, i+1))
-		if trace {
-			args = append(args, fmt.Sprintf("--lua-desync=solovey_profile_match:slot=%s:strategy=%d", slot, i+1))
+	return orchestrator
+}
+
+func (c *Circular) appendSplit(args []string, variant int, slot string, trace bool) []string {
+	args = append(args, fmt.Sprintf("--lua-desync=multisplit:pos=%d:strategy=%d", c.Splits[variant-1], variant))
+	if trace {
+		args = append(args, fmt.Sprintf("--lua-desync=solovey_profile_match:slot=%s:strategy=%d", slot, variant))
+	}
+	return args
+}
+
+// Circular consumes the remainder of the native plan and runs only the
+// actions whose literal strategy tag matches the selected variant.
+func circularStrategyTag(args string) (int, bool) {
+	tag := 0
+	for args != "" {
+		i := 0
+		for i < len(args) && args[i] != ':' {
+			if args[i] == '\\' && i+1 < len(args) && args[i+1] == ':' {
+				i++
+			}
+			i++
+		}
+		key, value, _ := strings.Cut(args[:i], "=")
+		if key == "strategy" {
+			n, err := strconv.Atoi(value)
+			if tag != 0 || err != nil || n < 1 {
+				return 0, false
+			}
+			tag = n
+		}
+		args = args[min(i+1, len(args)):]
+	}
+	return tag, tag != 0
+}
+
+func (p Profile) validCircularOrder() bool {
+	if p.Protocol != intent.PacketProtocolTCP || p.Payload != "" || p.Pass || p.SplitAt != 0 ||
+		p.QUICRepeats != 0 || p.OutRange != "" || len(p.HTTPActions) != 0 || len(p.LuaActions) == 0 || !p.Circular.valid() {
+		return false
+	}
+	nextSplit, luaIndex, started := 1, 0, false
+	for _, ref := range p.ActionOrder {
+		switch ref.Kind {
+		case nativeActionCircular:
+			if ref.Index == 0 {
+				if started || ref.Payload != "" {
+					return false
+				}
+				started = true
+				continue
+			}
+			if !started || ref.Index != nextSplit || (ref.Payload != TLSClientHello && ref.Payload != HTTPRequest) ||
+				payloadProtocol(ref.Payload) != p.L7Filter {
+				return false
+			}
+			nextSplit++
+		case nativeActionManaged:
+			if ref.Index != luaIndex || ref.Payload != "" || luaIndex >= len(p.LuaActions) || !p.LuaActions[luaIndex].valid() {
+				return false
+			}
+			if started {
+				if tag, ok := circularStrategyTag(p.LuaActions[luaIndex].Arguments); !ok || tag > len(p.Circular.Splits) {
+					return false
+				}
+			}
+			luaIndex++
+		default:
+			return false
+		}
+	}
+	return nextSplit == len(p.Circular.Splits)+1 && luaIndex == len(p.LuaActions)
+}
+
+func (p Profile) appendOrderedCircular(args []string, entries []string, slot string, trace bool) []string {
+	args = append(args, "--filter-l7="+p.L7Filter)
+	payload, span := Payload("all"), ""
+	for _, ref := range p.ActionOrder {
+		nextPayload, nextSpan := ref.Payload, ""
+		if ref.Kind == nativeActionManaged {
+			nextPayload, nextSpan = p.LuaActions[ref.Index].Payload, p.LuaActions[ref.Index].OutRange
+		}
+		if nextPayload == "" {
+			nextPayload = "all"
+		}
+		if nextPayload != payload {
+			args = append(args, "--payload="+string(nextPayload))
+			payload = nextPayload
+		}
+		args = appendOutRange(args, span, nextSpan)
+		span = nextSpan
+		if ref.Kind == nativeActionManaged {
+			action := p.LuaActions[ref.Index]
+			name := action.Function
+			if entries != nil {
+				name = entries[ref.Index]
+			}
+			args = append(args, action.argument(name))
+		} else if ref.Index == 0 {
+			args = append(args, "--in-range="+circularObserveRange(), p.Circular.orchestrator(slot), "--in-range="+circularVariantRange)
+		} else {
+			args = p.Circular.appendSplit(args, ref.Index, slot, trace)
 		}
 	}
 	return args

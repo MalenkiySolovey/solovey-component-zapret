@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -354,6 +356,119 @@ func sealedEngineLua(t *testing.T, program string) *os.File {
 		t.Fatal(err)
 	}
 	return file
+}
+
+func TestPinnedEngineRunsManagedCircular(t *testing.T) {
+	root, parent := os.Getenv("SOLOVEY_TEST_ENGINE_ROOT"), os.Getenv("SOLOVEY_TEST_PARENT_NETNS")
+	if root == "" || parent == "" {
+		t.Skip("requires the pinned engine and a disposable network namespace")
+	}
+	current, err := os.Readlink("/proc/self/ns/net")
+	initNS, initErr := os.Readlink("/proc/1/ns/net")
+	links, linkErr := net.Interfaces()
+	if err != nil || initErr != nil || current == parent || current == initNS || linkErr != nil || len(links) != 1 || links[0].Name != "lo" {
+		t.Fatal("refusing to install a Circular test queue outside a disposable loopback-only namespace")
+	}
+	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	addr := listener.Addr().(*net.TCPAddr)
+	const source = `function inspect(ctx, pkt)
+    assert(pkt.outgoing and pkt.track.lua_state)
+    if pkt.arg.phase == "before" then
+        assert(ctx ~= nil)
+        pkt.track.lua_state.observed = true
+        DLOG_ERR("fixture prelude")
+    else
+        assert(ctx == nil and pkt.track.lua_state.observed)
+        DLOG_ERR("fixture variant " .. pkt.arg.strategy)
+    end
+    return VERDICT_PASS
+end`
+	lua := LuaDraft{Origin: "administrator", Source: source}
+	raw := strings.Replace(managedCircularFixture, "--filter-tcp=443", fmt.Sprintf("--filter-tcp=%d", addr.Port), 1)
+	catalog := Catalog{LuaDrafts: map[string]LuaDraft{"operator": lua}}
+	refs := []LuaReference{{ID: "operator", Revision: lua.Revision()}}
+	record, err := catalog.SealDraft(Draft{ID: "circular-runtime", Name: "Managed Circular", Raw: &raw, ManagedLua: refs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	modules, err := catalog.SelectedLua(refs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const queue, mark, loop = 324, 0x120000, 0x40000000
+	material, err := CompileInstalledBindings(root, "/not-used-by-this-profile", "/proc/self/fd/3", queue, loop,
+		[]MarkedStrategy{{Strategy: record.Definition, QueueMark: mark}}, [][]LuaModule{modules}, false, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	engine := exec.CommandContext(t.Context(), filepath.Join(root, "nfqws2"), append([]string{"--uid=65534:65534"}, material.Args...)...)
+	engine.Dir, engine.Stdout, engine.Stderr = root, &output, &output
+	engine.ExtraFiles = []*os.File{sealedEngineLua(t, material.Lua)}
+	if err := engine.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = engine.Process.Kill()
+		_ = engine.Wait()
+		if t.Failed() {
+			t.Log(output.String())
+		}
+	}()
+	waitForQueueCondition(t, func() bool { _, bound := queueDrops(t, queue); return bound })
+	nft := exec.CommandContext(t.Context(), "nft", "-f", "-")
+	nft.Stdin = strings.NewReader(fmt.Sprintf(`add table inet zapret_circular_fixture
+add chain inet zapret_circular_fixture output { type filter hook output priority 0; policy accept; }
+add rule inet zapret_circular_fixture output oifname "lo" tcp dport %d meta mark 0x%x ct mark set 0x%x queue num %d
+add rule inet zapret_circular_fixture output oifname "lo" tcp sport %d ct mark 0x%x meta mark set 0x%x queue num %d
+`, addr.Port, mark, mark, queue, addr.Port, mark, mark, queue))
+	if out, err := nft.CombinedOutput(); err != nil {
+		t.Fatalf("install isolated TCP fixture queue: %v\n%s", err, out)
+	}
+	t.Cleanup(func() { _ = exec.Command("nft", "delete", "table", "inet", "zapret_circular_fixture").Run() })
+	const request = "GET / HTTP/1.1\r\nHost: circular.fixture.test\r\nConnection: close\r\n\r\n"
+	for _, socketMark := range []int{0, mark} {
+		dial := net.Dialer{Timeout: 3 * time.Second, Control: func(_, _ string, raw syscall.RawConn) error {
+			var setErr error
+			if err := raw.Control(func(fd uintptr) { setErr = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_MARK, socketMark) }); err != nil {
+				return err
+			}
+			return setErr
+		}}
+		client, err := dial.Dial("tcp4", addr.String())
+		if err != nil {
+			t.Fatalf("dial mark %x: %v", socketMark, err)
+		}
+		defer client.Close()
+		_ = client.SetWriteDeadline(time.Now().Add(3 * time.Second))
+		if _, err := io.WriteString(client, request); err != nil {
+			t.Fatal(err)
+		}
+		_ = listener.SetDeadline(time.Now().Add(3 * time.Second))
+		server, err := listener.AcceptTCP()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer server.Close()
+		_ = server.SetReadDeadline(time.Now().Add(3 * time.Second))
+		body := make([]byte, len(request))
+		if _, err := io.ReadFull(server, body); err != nil || string(body) != request {
+			t.Fatalf("mark %x changed the HTTP request: %q, %v", socketMark, body, err)
+		}
+	}
+	_ = engine.Process.Kill()
+	_ = engine.Wait()
+	log := output.String()
+	if strings.Count(log, "fixture prelude") != 1 || strings.Count(log, "fixture variant 1") != 1 ||
+		strings.Index(log, "fixture prelude") >= strings.Index(log, "fixture variant 1") ||
+		strings.Contains(log, "fixture variant 2") || strings.Contains(log, "managed Lua action failed") {
+		t.Fatal("expected one outgoing prelude followed by one selected variant, and no callback on control or return traffic")
+	}
+	t.Log("native Circular ran the selected managed callback after its prelude; both peer requests were intact")
 }
 
 func validateEngineArgs(t *testing.T, root string, argv []string) {

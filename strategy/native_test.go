@@ -464,6 +464,70 @@ func TestNativeManagedLuaPreservesMixedActionOrder(t *testing.T) {
 	}
 }
 
+const managedCircularFixture = `--filter-tcp=443 --filter-l7=http
+--payload=http_req --out-range=-d2 --lua-desync=inspect:phase=before
+--payload=all --out-range=a --in-range=-n32 --lua-desync=circular:fails=1
+--in-range=x --payload=http_req
+--lua-desync=inspect:label=service\:443:strategy=1
+--lua-desync=multisplit:pos=9:strategy=1
+--lua-desync=multisplit:pos=17:strategy=2
+--lua-desync=inspect:strategy=2
+--new=ordinary --filter-tcp=8443 --lua-desync=inspect:phase=next`
+
+func TestNativeManagedCircularPreservesReturnAndActionOrder(t *testing.T) {
+	draft := LuaDraft{Origin: "administrator", Source: "function inspect() return VERDICT_PASS end"}
+	catalog := Catalog{LuaDrafts: map[string]LuaDraft{"operator": draft}}
+	refs := []LuaReference{{ID: "operator", Revision: draft.Revision()}}
+	raw := managedCircularFixture
+	record, err := catalog.SealDraft(Draft{ID: "mixed-circular", Name: "Mixed", Raw: &raw, ManagedLua: refs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := record.Definition
+	scope, err := value.PacketScope()
+	if err != nil || !value.NeedsReturn || !slices.Equal(scope.ReturnTCP, []uint16{443}) || !slices.Equal(scope.TCP, []uint16{443, 8443}) {
+		t.Fatalf("mixed actions changed return scope: %+v, %v", scope, err)
+	}
+	canonical, err := catalog.SealDraft(Draft{ID: value.ID, Name: record.Name, Profiles: value.Profiles, ManagedLua: refs})
+	if err != nil || canonical.Definition.Revision != value.Revision || record.Raw != raw {
+		t.Fatalf("mixed Circular did not round-trip: %s, %v", canonical.Raw, err)
+	}
+	modules, err := catalog.SelectedLua(refs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings := []MarkedStrategy{{Strategy: value, QueueMark: 0x120000}}
+	if _, _, _, err := CompileManagedBindings("/engine", "/run/managed.lua", 401, 0x40000000, bindings,
+		[][]LuaModule{modules}, false, false); !errors.Is(err, errReturnObservationUnavailable) {
+		t.Fatalf("mixed Circular ignored missing return admission: %v", err)
+	}
+	args, _, _, err := CompileManagedBindings("/engine", "/run/managed.lua", 401, 0x40000000, bindings, [][]LuaModule{modules}, true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"--payload=http_req", "--out-range=-d2", "--lua-desync=solovey_managed_0_0:phase=before", "--payload=all", "--out-range=a",
+		"--in-range=-n32", "--lua-desync=circular:fails=1:key=solovey_1/1:hostkey=solovey_circular_hostkey", "--in-range=x", "--payload=http_req",
+		`--lua-desync=solovey_managed_0_1:label=service\:443:strategy=1`, "--lua-desync=multisplit:pos=9:strategy=1",
+		"--lua-desync=solovey_profile_match:slot=1/1:strategy=1", "--lua-desync=multisplit:pos=17:strategy=2",
+		"--lua-desync=solovey_profile_match:slot=1/1:strategy=2", "--lua-desync=solovey_managed_0_2:strategy=2"}
+	start := slices.Index(args, want[0])
+	if start < 0 || len(args) < start+len(want) || !slices.Equal(args[start:start+len(want)], want) ||
+		!slices.Contains(args, "--lua-desync=solovey_managed_0_3:phase=next") {
+		t.Fatalf("Circular emitted different action snapshots or names: %q", args)
+	}
+	for _, tc := range []struct{ replace, with, reason string }{
+		{"--in-range=x --payload=http_req", "--lua-desync=inspect:strategy=1 --in-range=x --payload=http_req", "return-path range"},
+		{"label=service\\:443:strategy=1", "label=service\\:strategy=1", "explicit strategy=N"},
+		{"label=service\\:443:strategy=1", "strategy=1:strategy=2", "explicit strategy=N"},
+		{"label=service\\:443:strategy=1", "strategy=3", "defined strategy in 1..2"},
+	} {
+		bad := strings.Replace(raw, tc.replace, tc.with, 1)
+		if _, err := catalog.SealDraft(Draft{ID: "mixed-circular", Name: "Mixed", Raw: &bad, ManagedLua: refs}); !errors.Is(err, ErrInvalidStrategy) || !strings.Contains(err.Error(), tc.reason) {
+			t.Errorf("invalid Circular action did not say %q: %v", tc.reason, err)
+		}
+	}
+}
+
 func TestNativeProfileRejectsExecutorAndAuthorityOptions(t *testing.T) {
 	for _, raw := range []string{
 		"--filter-tcp=443 --lua-init=@/tmp/local.lua",

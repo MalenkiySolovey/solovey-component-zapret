@@ -71,9 +71,26 @@ func parseNativeWithLua(id, text string, managed []LuaReference, lists *nativeLi
 		if current.listRefs != (NativeListRefs{}) {
 			lists.addActive(current.ID, current.listRefs)
 		}
+		if current.Circular != nil {
+			if current.circularPayload == "" || payloadProtocol(current.circularPayload) != current.l7 {
+				return fmt.Errorf("%w: Circular variants need the profile's matching TLS or HTTP payload filter", ErrInvalidStrategy)
+			}
+			current.Payload = current.circularPayload
+			started := false
+			for _, ref := range current.actionOrder {
+				if ref.Kind == nativeActionCircular && ref.Index == 0 {
+					started = true
+				}
+				if started && ref.Kind == nativeActionManaged {
+					if tag, ok := circularStrategyTag(current.LuaActions[ref.Index].Arguments); !ok || tag > len(current.Circular.Splits) {
+						return fmt.Errorf("%w: a callback after Circular must name a defined strategy in 1..%d", ErrInvalidStrategy, len(current.Circular.Splits))
+					}
+				}
+			}
+		}
 		if len(current.LuaActions) != 0 && current.hasNonManagedAction() {
-			if current.inRange != "" {
-				return fmt.Errorf("%w: managed Lua cannot be combined with an incoming-range or Circular return-path action", ErrInvalidStrategy)
+			if current.Circular == nil && current.inRange != "" {
+				return fmt.Errorf("%w: managed Lua needs an outgoing-only action window", ErrInvalidStrategy)
 			}
 			current.Payload, current.L7Filter = "", current.l7
 			current.ActionOrder = append([]NativeActionRef(nil), current.actionOrder...)
@@ -184,14 +201,17 @@ func parseNativeWithLua(id, text string, managed []LuaReference, lists *nativeLi
 			current.l7 = input
 		case "--in-range":
 			// The pinned engine snapshots the range at each Lua action.
-			observe := current.inRange == "" && input == circularObserveRange() && !current.seen["--lua-desync"]
+			if current.inRange == "" && input == circularVariantRange {
+				continue // x is already the engine's initial incoming range.
+			}
+			observe := current.inRange == "" && input == circularObserveRange() && !current.hasNonManagedAction()
 			disable := current.inRange == circularObserveRange() && input == circularVariantRange && current.Circular != nil
-			if current.seen["--payload"] || !(observe || disable) {
+			if !(observe || disable) {
 				return Strategy{}, bad
 			}
 			current.inRange = input
 		case "--out-range":
-			if current.Circular != nil {
+			if current.inRange == circularObserveRange() && current.Circular != nil {
 				return Strategy{}, fmt.Errorf("%w: --out-range is not qualified for Circular's return-path action", ErrInvalidStrategy)
 			}
 			if current.outRangePending {
@@ -208,10 +228,15 @@ func parseNativeWithLua(id, text string, managed []LuaReference, lists *nativeLi
 			current.Payload = Payload(input)
 		case "--lua-desync":
 			if len(managed) != 0 && !builtInLuaAction(input) {
-				if current.Circular != nil || current.inRange != "" {
+				if current.inRange != "" && current.inRange != circularVariantRange {
 					return Strategy{}, token.invalid(fmt.Errorf("%w: managed Lua cannot be inserted into Circular's return-path range", ErrInvalidStrategy))
 				}
 				name, arguments, _ := strings.Cut(input, ":")
+				if current.Circular != nil {
+					if _, ok := circularStrategyTag(arguments); !ok {
+						return Strategy{}, token.invalid(fmt.Errorf("%w: a callback after Circular needs an explicit strategy=N for one of its variants", ErrInvalidStrategy))
+					}
+				}
 				action := LuaAction{Function: name, Arguments: arguments, Payload: current.Payload, OutRange: current.outRange}
 				if !action.valid() {
 					return Strategy{}, bad
@@ -222,9 +247,14 @@ func parseNativeWithLua(id, text string, managed []LuaReference, lists *nativeLi
 				continue
 			}
 			if current.Circular != nil {
-				if current.inRange != circularVariantRange || !current.seen["--payload"] || !current.Circular.addVariant(input) {
+				if current.inRange != circularVariantRange || (current.outRange != "" && current.outRange != "a") ||
+					(current.Payload != TLSClientHello && current.Payload != HTTPRequest) ||
+					(current.circularPayload != "" && current.circularPayload != current.Payload) || !current.Circular.addVariant(input) {
 					return Strategy{}, bad
 				}
+				current.circularPayload = current.Payload
+				current.actionOrder = append(current.actionOrder, NativeActionRef{Kind: nativeActionCircular, Index: len(current.Circular.Splits), Payload: current.Payload})
+				current.outRangePending = false
 				continue
 			}
 			if action, ok := parseHTTPAction(input); ok {
@@ -249,11 +279,11 @@ func parseNativeWithLua(id, text string, managed []LuaReference, lists *nativeLi
 				continue
 			}
 			if fails, ok := strings.CutPrefix(input, "circular:fails="); input == "circular" || ok {
-				if current.seen["--out-range"] {
+				if current.outRange != "" && current.outRange != "a" {
 					return Strategy{}, fmt.Errorf("%w: --out-range is not qualified for Circular's return-path action", ErrInvalidStrategy)
 				}
-				if current.inRange != circularObserveRange() || current.seen["--payload"] {
-					return Strategy{}, fmt.Errorf("%w: Circular requires --in-range=%s before its action, then --in-range=%s and --payload before its variants",
+				if current.inRange != circularObserveRange() || (current.Payload != "" && current.Payload != "all") {
+					return Strategy{}, fmt.Errorf("%w: Circular requires --in-range=%s and an unrestricted payload before its action, then --in-range=%s and --payload before its variants",
 						ErrInvalidStrategy, circularObserveRange(), circularVariantRange)
 				}
 				n := uint64(3)
@@ -265,6 +295,8 @@ func parseNativeWithLua(id, text string, managed []LuaReference, lists *nativeLi
 					}
 				}
 				current.Circular = &Circular{Failures: uint8(n)}
+				current.actionOrder = append(current.actionOrder, NativeActionRef{Kind: nativeActionCircular})
+				current.outRangePending = false
 				continue
 			}
 			if pos, ok := strings.CutPrefix(input, "multisplit:pos="); ok {
@@ -419,7 +451,13 @@ func FormatNative(value Strategy) (string, error) {
 			fmt.Fprintln(&text, arg)
 		}
 		if profile.Circular != nil {
-			for _, arg := range profile.circularArgs("", false) {
+			var args []string
+			if len(profile.ActionOrder) != 0 {
+				args = profile.appendOrderedCircular(nil, nil, "", false)
+			} else {
+				args = profile.circularArgs("", false)
+			}
+			for _, arg := range args {
 				fmt.Fprintln(&text, arg)
 			}
 			continue
