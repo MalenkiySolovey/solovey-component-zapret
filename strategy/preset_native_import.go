@@ -65,10 +65,7 @@ func (c Catalog) prepareNativeSource(id, name string, source nativePresetSource)
 		}
 	}
 	for i, next := 0, 0; i < len(tokens); i = next {
-		next = i + 1
-		for next < len(tokens) && tokens[next].text != "--new" && !strings.HasPrefix(tokens[next].text, "--new=") {
-			next++
-		}
+		next = nativeProfileEnd(tokens, i)
 		p.profile(tokens[i:next])
 	}
 	for _, key := range sortedImportKeys(p.decl) {
@@ -146,7 +143,7 @@ func (p *nativePresetPlan) rewrite(tokens []sourceToken) string {
 func (p *nativePresetPlan) profile(tokens []sourceToken) {
 	profile := PresetProfile{Line: tokens[0].Line}
 	id := fmt.Sprintf("profile-%d", p.active+1)
-	isTemplate := false
+	isTemplate, skipped := false, nativeProfileSkipped(tokens)
 	for _, token := range tokens {
 		key, value, ok := strings.Cut(token.text, "=")
 		isTemplate = isTemplate || key == "--template"
@@ -154,7 +151,7 @@ func (p *nativePresetPlan) profile(tokens []sourceToken) {
 			profile.Name = value
 			id = value
 		}
-		if isProfileOption(key) || fileListKind(key) != "" {
+		if isProfileOption(key) || fileListKind(key) != "" || key == "--skip" && !ok {
 			profile.Options = append(profile.Options, token.text)
 		}
 	}
@@ -166,6 +163,9 @@ func (p *nativePresetPlan) profile(tokens []sourceToken) {
 	var payloadSeen bool
 	for _, token := range tokens {
 		key, value, ok := strings.Cut(token.text, "=")
+		if skipped && skippedNativeOption(key, ok) && (fileListKind(key) == "" || !p.hasSkippedList(value)) {
+			continue
+		}
 		if key == "--payload" {
 			payloadSeen = true
 		}
@@ -196,7 +196,11 @@ func (p *nativePresetPlan) profile(tokens []sourceToken) {
 		}
 	}
 	if !isTemplate && refs != (NativeListRefs{}) {
-		p.refs[id] = refs
+		if _, exists := p.refs[id]; exists {
+			p.preview.issue(&tokens[0], "duplicate-list-owner", "use distinct profile IDs for managed lists")
+		} else {
+			p.refs[id] = refs
+		}
 	}
 }
 
@@ -248,7 +252,7 @@ func classifyPresetOption(key string) (string, string) {
 		return "platform-option", "Windows interception or file-write option; Solovey uses its scoped Linux network owner"
 	case key == "--lua-init":
 		return "trust-restricted", "Lua loading is runtime-owned; imported programs and script paths are never executed"
-	case key == "--skip", key == "--cookie":
+	case key == "--cookie":
 		return "unrepresented-profile", "this native profile/template control cannot be represented without changing its semantics"
 	case strings.HasPrefix(key, "--ctrack-"), strings.HasPrefix(key, "--ipcache-"), key == "--qnum", key == "--debug":
 		return "runtime-option", "global engine and queue configuration is runtime-owned, not part of a Strategy"
@@ -267,6 +271,22 @@ func fileListKind(key string) ListKind {
 		return IPSetKind
 	}
 	return ""
+}
+
+// Keep data supplied for an inactive profile in managed storage. A missing
+// inactive dependency can remain in its original source until reactivation.
+func (p *nativePresetPlan) hasSkippedList(value string) bool {
+	value = unquotePresetPath(value)
+	if p.guiLists != nil {
+		name, ok := strings.CutPrefix(strings.ReplaceAll(value, "\\", "/"), "lists/")
+		_, present := p.guiLists[strings.ToLower(name)]
+		return ok && present
+	}
+	if _, present := p.files[value]; present {
+		return true
+	}
+	_, present := p.catalog.Lists[presetAssetID(value, "lists/", ".txt")]
+	return present
 }
 
 func (p *nativePresetPlan) mapList(token sourceToken, key, value string, refs *NativeListRefs) {

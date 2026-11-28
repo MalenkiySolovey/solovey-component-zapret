@@ -71,13 +71,19 @@ func (r *NativeListRefs) merge(other NativeListRefs) error {
 type nativeListProjection struct {
 	templates ListRefs
 	active    ListRefs
+	skipped   map[string]bool
 }
 
-func (p *nativeListProjection) addTemplate(id string, refs NativeListRefs) {
+func (p *nativeListProjection) addTemplate(id string, refs NativeListRefs) error {
 	if p.templates == nil {
 		p.templates = make(ListRefs)
 	}
-	p.templates[templateListPrefix+id] = refs
+	key := templateListPrefix + id
+	if previous, exists := p.templates[key]; exists && previous != refs {
+		return fmt.Errorf("%w: templates named %q have different managed lists", ErrInvalidStrategy, id)
+	}
+	p.templates[key] = refs
+	return nil
 }
 
 func (p *nativeListProjection) addActive(id string, refs NativeListRefs) {
@@ -85,6 +91,13 @@ func (p *nativeListProjection) addActive(id string, refs NativeListRefs) {
 		p.active = make(ListRefs)
 	}
 	p.active[id] = refs
+}
+
+func (p *nativeListProjection) addSkipped(id string) {
+	if p.skipped == nil {
+		p.skipped = make(map[string]bool)
+	}
+	p.skipped[id] = true
 }
 
 func (p nativeListProjection) resolve(saved ListRefs) (authored, effective ListRefs, err error) {
@@ -100,6 +113,9 @@ func (p nativeListProjection) resolve(saved ListRefs) (authored, effective ListR
 			authored = make(ListRefs)
 		}
 		authored[profile] = refs
+		if p.skipped[profile] {
+			continue
+		}
 		if effective == nil {
 			effective = make(ListRefs)
 		}
@@ -113,20 +129,22 @@ func (p nativeListProjection) resolve(saved ListRefs) (authored, effective ListR
 }
 
 func (r Record) effectiveListRefs() (ListRefs, error) {
+	project := len(r.ListRefs) != 0 && strings.Contains(r.Raw, "--skip")
 	for key := range r.ListRefs {
-		if strings.HasPrefix(key, templateListPrefix) {
-			var projection nativeListProjection
-			if _, err := parseNativeWithLua(r.Definition.ID, r.Raw, r.Definition.ManagedLua, &projection); err != nil {
-				return nil, err
-			}
-			authored, effective, err := projection.resolve(r.ListRefs)
-			if err == nil && !maps.Equal(authored, r.ListRefs) {
-				return nil, errors.New("template lists do not match native source")
-			}
-			return effective, err
-		}
+		project = project || strings.HasPrefix(key, templateListPrefix)
 	}
-	return r.ListRefs, nil
+	if !project {
+		return r.ListRefs, nil
+	}
+	var projection nativeListProjection
+	if _, err := parseNativeWithLua(r.Definition.ID, r.Raw, r.Definition.ManagedLua, &projection); err != nil {
+		return nil, err
+	}
+	authored, effective, err := projection.resolve(r.ListRefs)
+	if err == nil && !maps.Equal(authored, r.ListRefs) {
+		return nil, errors.New("recorded lists do not match native source")
+	}
+	return effective, err
 }
 
 func (l NamedList) normalize() (NamedList, error) {
@@ -165,14 +183,17 @@ func (c Catalog) validateLists() error {
 
 var nativeListKinds = [...]ListKind{HostListKind, HostListKind, IPSetKind, IPSetKind}
 
-func (c Catalog) checkTemplateLists(templates ListRefs) error {
-	for template, refs := range templates {
+func (c Catalog) checkInactiveLists(projection nativeListProjection, authored ListRefs) error {
+	for profile, refs := range authored {
+		if !projection.skipped[profile] && !strings.HasPrefix(profile, templateListPrefix) {
+			continue
+		}
 		for i, id := range refs.ids() {
 			if id == "" {
 				continue
 			}
 			if list, ok := c.Lists[id]; !ok || list.Kind != nativeListKinds[i] || len(list.Entries) == 0 {
-				return fmt.Errorf("template %q: native list %q is missing or has the wrong kind", strings.TrimPrefix(template, templateListPrefix), id)
+				return fmt.Errorf("profile %q: native list %q is missing or has the wrong kind", profile, id)
 			}
 		}
 	}

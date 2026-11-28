@@ -115,11 +115,11 @@ func (c Catalog) SealDraft(d Draft) (Record, error) {
 	if err != nil {
 		return Record{}, err
 	}
-	if err := c.checkTemplateLists(listProjection.templates); err != nil {
-		return Record{}, err
-	}
 	listRefs, effective, err := listProjection.resolve(d.ListRefs)
 	if err != nil {
+		return Record{}, err
+	}
+	if err := c.checkInactiveLists(listProjection, listRefs); err != nil {
 		return Record{}, err
 	}
 	if len(listProjection.active) != 0 {

@@ -35,10 +35,21 @@ func parseNativeWithLua(id, text string, managed []LuaReference, lists *nativeLi
 	first := func(id string) nativeDraft {
 		return nativeDraft{Profile: Profile{ID: id}, seen: map[string]bool{}}
 	}
+	ordinal := 1
 	current := first("profile-1")
 	templates := map[string]nativeDraft{}
 	value := Strategy{Schema: Schema, ID: id, ManagedLua: managed}
 	finish := func() error {
+		if current.skipped {
+			if lists != nil {
+				if !current.template {
+					lists.addSkipped(current.ID)
+				} else if current.declaredListRefs != (NativeListRefs{}) {
+					return lists.addTemplate(current.ID, current.declaredListRefs)
+				}
+			}
+			return nil
+		}
 		if current.outRangePending {
 			return fmt.Errorf("%w: --out-range needs a following action in native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
 		}
@@ -57,7 +68,9 @@ func parseNativeWithLua(id, text string, managed []LuaReference, lists *nativeLi
 				current.Lists = lists
 			}
 			if current.declaredListRefs != (NativeListRefs{}) {
-				lists.addTemplate(current.ID, current.declaredListRefs)
+				if err := lists.addTemplate(current.ID, current.declaredListRefs); err != nil {
+					return err
+				}
 			}
 			templates[current.ID] = current
 			return nil
@@ -116,26 +129,45 @@ func parseNativeWithLua(id, text string, managed []LuaReference, lists *nativeLi
 		value.Profiles = append(value.Profiles, current.Profile)
 		return nil
 	}
-	for _, token := range tokens {
+	var skippedUntil int
+	for i, token := range tokens {
+		if i < skippedUntil {
+			continue
+		}
 		arg := token.text
 		key, input, hasValue := strings.Cut(arg, "=")
-		bad := token.invalid(fmt.Errorf("%w: unsupported, repeated, or malformed native option", ErrInvalidStrategy))
-		if strings.ContainsFunc(arg, func(c rune) bool { return c < '!' || c > '~' }) {
-			return Strategy{}, bad
-		}
-		if key == "--lua-init" {
-			return Strategy{}, token.invalid(fmt.Errorf("%w: %w", ErrInvalidStrategy, ErrUnsupportedCustomLua))
-		}
 		if key == "--new" {
 			if err := finish(); err != nil {
 				return Strategy{}, token.invalid(err)
 			}
-			current = first(fmt.Sprintf("profile-%d", len(value.Profiles)+1))
+			if !current.template {
+				ordinal++
+			}
+			current = first(fmt.Sprintf("profile-%d", ordinal))
 			if hasValue {
 				current.ID, current.named = input, true
 				current.seen["--name"] = true
 			}
+		}
+		if i == 0 || key == "--new" {
+			end := nativeProfileEnd(tokens, i)
+			if nativeProfileSkipped(tokens[i:end]) {
+				if err := current.skipNativeProfile(tokens[i:end]); err != nil {
+					return Strategy{}, err
+				}
+				skippedUntil = end
+				continue
+			}
+		}
+		bad := token.invalid(fmt.Errorf("%w: unsupported, repeated, or malformed native option", ErrInvalidStrategy))
+		if strings.ContainsFunc(arg, func(c rune) bool { return c < '!' || c > '~' }) {
+			return Strategy{}, bad
+		}
+		if key == "--new" {
 			continue
+		}
+		if key == "--lua-init" {
+			return Strategy{}, token.invalid(fmt.Errorf("%w: %w", ErrInvalidStrategy, ErrUnsupportedCustomLua))
 		}
 		if key == "--template" {
 			if hasValue && !outbounds.ValidZapretStrategyRef(input) {
@@ -350,10 +382,46 @@ func parseNativeWithLua(id, text string, managed []LuaReference, lists *nativeLi
 		return Strategy{}, err
 	}
 	if len(value.Profiles) == 0 {
-		return Strategy{}, fmt.Errorf("%w: templates do not run; add an active profile", ErrInvalidStrategy)
+		return Strategy{}, fmt.Errorf("%w: templates do not run and skipped profiles are inactive. Add an active profile", ErrInvalidStrategy)
+	}
+	if lists != nil {
+		for _, profile := range value.Profiles {
+			if lists.skipped[profile.ID] {
+				return Strategy{}, fmt.Errorf("%w: active and skipped profiles share ID %q", ErrInvalidStrategy, profile.ID)
+			}
+		}
 	}
 	value.Assets = nativeAssets(value.Profiles)
 	return value, nil
+}
+
+func (d *nativeDraft) skipNativeProfile(tokens []sourceToken) error {
+	d.skipped = true
+	for _, token := range tokens {
+		key, value, hasValue := strings.Cut(token.text, "=")
+		if key == "--lua-init" {
+			return token.invalid(fmt.Errorf("%w: %w", ErrInvalidStrategy, ErrUnsupportedCustomLua))
+		}
+		if !skippedNativeOption(key, hasValue) {
+			return token.invalid(fmt.Errorf("%w: --skip applies only to native profile options", ErrInvalidStrategy))
+		}
+		if key == "--template" {
+			d.template = true
+		}
+		if hasValue && (key == "--name" || key == "--template") {
+			d.ID = value
+		}
+		if slot := d.declaredListRefs.slot(key); slot != nil {
+			id := presetAssetID(unquotePresetPath(value), "lists/", ".txt")
+			if *slot != "" && id != "" && *slot != id {
+				return token.invalid(fmt.Errorf("%w: use one managed list per native filter slot", ErrInvalidStrategy))
+			}
+			if id != "" {
+				*slot = id
+			}
+		}
+	}
+	return nil
 }
 
 func builtInLuaAction(input string) bool {
