@@ -82,7 +82,12 @@ packages retain dependencies and order but do not transfer execution consent.
 
 The original nfqws2 interpreter loads managed code into a separate environment
 per Strategy. Callbacks receive a copy of the selected packet data and their
-own per-flow Lua state; the shared built-in flow state is not exposed. The
+own per-flow Lua state; the shared built-in flow state is not exposed.
+`VERDICT_MODIFY` returns the edited `desync.dis` to nfqws2 for native
+reconstruction. The edit must retain the selected address family, endpoints,
+transport and fragment offset: an in-place verdict cannot select a new
+admitted flow. A malformed edit or verdict drops that packet and logs a
+diagnostic; edits without `VERDICT_MODIFY` remain private to the callback. The
 pinned native API is available with its original argument semantics, including
 packet parsing/reconstruction and checksum helpers, address and bit helpers,
 raw-send and conntrack helpers, timers, statistics, compression/crypto and
