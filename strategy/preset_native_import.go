@@ -17,6 +17,7 @@ type nativePresetSource struct {
 	origin        *PresetOrigin
 	guiLists      map[string]guiPresetList
 	dependencyIDs map[string]string
+	listWorkspace *int
 }
 
 type nativePresetPlan struct {
@@ -30,6 +31,7 @@ type nativePresetPlan struct {
 	blobs    map[string]string
 	decl     map[string]presetBlob
 	refs     ListRefs
+	active   int
 	ids      map[string]string
 	bound    map[string]bool
 }
@@ -105,7 +107,7 @@ func (c Catalog) prepareNativeSource(id, name string, source nativePresetSource)
 		return Catalog{}, p.preview, nil
 	}
 	canonical := p.rewrite(tokens)
-	return finishPreset(c, p.preview, Draft{ID: id, Name: firstName(name, "Imported Strategy"), Raw: &canonical, ListRefs: p.refs}, p.lists, p.blobs)
+	return finishPreset(c, p.preview, Draft{ID: id, Name: firstName(name, "Imported Strategy"), Raw: &canonical, ListRefs: p.refs, listWorkspace: source.listWorkspace}, p.lists, p.blobs)
 }
 
 func sortedImportKeys[T any](values map[string]T) []string {
@@ -128,7 +130,7 @@ func (p *nativePresetPlan) rewrite(tokens []sourceToken) string {
 		text.WriteString(p.preview.Source[previous:token.start])
 		value, changed := p.edits[token.start]
 		if !changed {
-			value = token.text
+			value = p.preview.Source[token.start:token.end]
 		}
 		if value != "" {
 			p.preview.projected[text.Len()] = token
@@ -142,18 +144,22 @@ func (p *nativePresetPlan) rewrite(tokens []sourceToken) string {
 }
 
 func (p *nativePresetPlan) profile(tokens []sourceToken) {
-	index := len(p.preview.Profiles) + 1
 	profile := PresetProfile{Line: tokens[0].Line}
-	id := fmt.Sprintf("profile-%d", index)
+	id := fmt.Sprintf("profile-%d", p.active+1)
+	isTemplate := false
 	for _, token := range tokens {
 		key, value, ok := strings.Cut(token.text, "=")
-		if ok && (key == "--name" || key == "--new") {
+		isTemplate = isTemplate || key == "--template"
+		if ok && (key == "--name" || key == "--new" || key == "--template") {
 			profile.Name = value
 			id = value
 		}
 		if isProfileOption(key) || fileListKind(key) != "" {
 			profile.Options = append(profile.Options, token.text)
 		}
+	}
+	if !isTemplate {
+		p.active++
 	}
 	p.preview.Profiles = append(p.preview.Profiles, profile)
 	var refs NativeListRefs
@@ -171,6 +177,16 @@ func (p *nativePresetPlan) profile(tokens []sourceToken) {
 			// Checked separately so a declaration can be resolved before use.
 		case fileListKind(key) != "":
 			p.mapList(token, key, value, &refs)
+			if isTemplate && *refs.slot(key) != "" {
+				// Keep the dependency in its source scope. It must follow future
+				// edits to --import, not the profile that first consumed it.
+				managed := "lists/" + *refs.slot(key) + ".txt"
+				if unquotePresetPath(value) == managed {
+					delete(p.edits, token.start)
+				} else {
+					p.edits[token.start] = key + "=" + managed
+				}
+			}
 		case key == "--lua-desync" && p.mapBlobAction(token, value):
 		case isProfileOption(key):
 			p.checkProfileOption(token, key, value, ok)
@@ -179,14 +195,14 @@ func (p *nativePresetPlan) profile(tokens []sourceToken) {
 			p.preview.issue(&token, code, reason)
 		}
 	}
-	if refs != (NativeListRefs{}) {
+	if !isTemplate && refs != (NativeListRefs{}) {
 		p.refs[id] = refs
 	}
 }
 
 func isProfileOption(key string) bool {
 	switch key {
-	case "--name", "--new", "--filter-l3", "--filter-l7", "--filter-tcp", "--filter-udp", "--payload", "--in-range", "--out-range",
+	case "--name", "--new", "--template", "--import", "--filter-l3", "--filter-l7", "--filter-tcp", "--filter-udp", "--payload", "--in-range", "--out-range",
 		"--lua-desync", "--hostlist-domains", "--hostlist-exclude-domains", "--ipset-ip", "--ipset-exclude-ip":
 		return true
 	}
@@ -196,8 +212,8 @@ func isProfileOption(key string) bool {
 func (p *nativePresetPlan) checkProfileOption(token sourceToken, key, value string, hasValue bool) {
 	var reason string
 	switch key {
-	case "--name", "--new":
-		if (hasValue || key == "--name") && !outbounds.ValidZapretStrategyRef(value) {
+	case "--name", "--new", "--template", "--import":
+		if (hasValue || key == "--name" || key == "--import") && !outbounds.ValidZapretStrategyRef(value) {
 			reason = "profile IDs must be 1 to 64 lowercase letters, digits or hyphens; edit this ID explicitly before importing"
 		}
 	case "--filter-tcp", "--filter-udp":
@@ -232,7 +248,7 @@ func classifyPresetOption(key string) (string, string) {
 		return "platform-option", "Windows interception or file-write option; Solovey uses its scoped Linux network owner"
 	case key == "--lua-init":
 		return "trust-restricted", "Lua loading is runtime-owned; imported programs and script paths are never executed"
-	case key == "--template", key == "--import", key == "--skip", key == "--cookie":
+	case key == "--skip", key == "--cookie":
 		return "unrepresented-profile", "this native profile/template control cannot be represented without changing its semantics"
 	case strings.HasPrefix(key, "--ctrack-"), strings.HasPrefix(key, "--ipcache-"), key == "--qnum", key == "--debug":
 		return "runtime-option", "global engine and queue configuration is runtime-owned, not part of a Strategy"
@@ -254,17 +270,7 @@ func fileListKind(key string) ListKind {
 }
 
 func (p *nativePresetPlan) mapList(token sourceToken, key, value string, refs *NativeListRefs) {
-	var slot *string
-	switch key {
-	case "--hostlist":
-		slot = &refs.HostList
-	case "--hostlist-exclude":
-		slot = &refs.HostListExclude
-	case "--ipset":
-		slot = &refs.IPSet
-	case "--ipset-exclude":
-		slot = &refs.IPSetExclude
-	}
+	slot := refs.slot(key)
 	if *slot != "" {
 		p.preview.issue(&token, "multiple-list-files", "one managed list per filter is admitted; combine source entries and review the result explicitly")
 		return

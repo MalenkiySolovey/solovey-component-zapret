@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/MalenkiySolovey/solovey-host/network/intent"
+	"github.com/MalenkiySolovey/solovey-host/outbounds"
 )
 
 var ErrUnsupportedCustomLua = errors.New("UNSUPPORTED_CUSTOM_LUA: select managed Lua source revisions instead of loading a host file or inline Lua")
@@ -23,32 +24,52 @@ func ParseNative(id, text string) (Strategy, error) {
 }
 
 func parseNative(id, text string) (Strategy, error) {
-	return parseNativeWithLua(id, text, nil)
+	return parseNativeWithLua(id, text, nil, nil)
 }
 
-func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, error) {
+func parseNativeWithLua(id, text string, managed []LuaReference, lists *nativeListProjection) (Strategy, error) {
 	tokens, err := nativeSource(text)
 	if err != nil {
 		return Strategy{}, err
 	}
-	type draft struct {
-		Profile
-		l7, inRange, outRange string
-		outRangePending       bool
-		seen                  map[string]bool
-		actionOrder           []NativeActionRef
-	}
-	first := func(id string) draft {
-		return draft{Profile: Profile{ID: id}, seen: map[string]bool{}}
+	first := func(id string) nativeDraft {
+		return nativeDraft{Profile: Profile{ID: id}, seen: map[string]bool{}}
 	}
 	current := first("profile-1")
+	templates := map[string]nativeDraft{}
 	value := Strategy{Schema: Schema, ID: id, ManagedLua: managed}
 	finish := func() error {
 		if current.outRangePending {
 			return fmt.Errorf("%w: --out-range needs a following action in native profile %d", ErrInvalidStrategy, len(value.Profiles)+1)
 		}
+		if current.template {
+			if !current.named || !outbounds.ValidZapretStrategyRef(current.ID) {
+				return fmt.Errorf("%w: name the template with --template=<id> or --name=<id>", ErrInvalidStrategy)
+			}
+			if _, exists := templates[current.ID]; exists {
+				return fmt.Errorf("%w: template %q is already defined", ErrInvalidStrategy, current.ID)
+			}
+			if current.Lists != nil {
+				lists, err := current.Lists.seal()
+				if err != nil {
+					return err
+				}
+				current.Lists = lists
+			}
+			if current.declaredListRefs != (NativeListRefs{}) {
+				lists.addTemplate(current.ID, current.declaredListRefs)
+			}
+			templates[current.ID] = current
+			return nil
+		}
+		if current.declaredListRefs != (NativeListRefs{}) {
+			return fmt.Errorf("%w: select managed lists for an active profile in the editor; lists/<id>.txt options belong to templates", ErrInvalidStrategy)
+		}
 		if current.Protocol == "" {
 			return fmt.Errorf("%w: native profile %d requires a nonempty TCP or UDP destination port scope (1-65535)", ErrInvalidStrategy, len(value.Profiles)+1)
+		}
+		if current.listRefs != (NativeListRefs{}) {
+			lists.addActive(current.ID, current.listRefs)
 		}
 		if len(current.LuaActions) != 0 && current.hasNonManagedAction() {
 			if current.inRange != "" {
@@ -94,27 +115,55 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 			}
 			current = first(fmt.Sprintf("profile-%d", len(value.Profiles)+1))
 			if hasValue {
-				current.ID = input
+				current.ID, current.named = input, true
 				current.seen["--name"] = true
 			}
 			continue
 		}
-		repeatable := key == "--in-range" || key == "--out-range" || key == "--lua-desync" &&
+		if key == "--template" {
+			if hasValue && !outbounds.ValidZapretStrategyRef(input) {
+				return Strategy{}, bad
+			}
+			current.template = true
+			if hasValue {
+				current.ID, current.named = input, true
+				current.seen["--name"] = true
+			}
+			continue
+		}
+		if key == "--import" {
+			if !hasValue || !outbounds.ValidZapretStrategyRef(input) {
+				return Strategy{}, token.invalid(fmt.Errorf("%w: specify a template ID after --import", ErrInvalidStrategy))
+			}
+			template, exists := templates[input]
+			if !exists {
+				return Strategy{}, token.invalid(fmt.Errorf("%w: template %q must be defined in an earlier profile", ErrInvalidStrategy, input))
+			}
+			if err := current.importTemplate(template); err != nil {
+				return Strategy{}, token.invalid(err)
+			}
+			continue
+		}
+		if current.inheritedActions && (key == "--lua-desync" || key == "--payload" || key == "--in-range" || key == "--out-range") {
+			return Strategy{}, token.invalid(errTemplateActionOrder)
+		}
+		repeatable := key == "--filter-l3" || key == "--in-range" || key == "--out-range" || key == "--lua-desync" &&
 			(current.Circular != nil || len(current.HTTPActions) != 0 || len(current.LuaActions) != 0 || len(current.actionOrder) != 0) ||
-			key == "--payload" && len(current.actionOrder) != 0
+			key == "--payload" && len(current.actionOrder) != 0 ||
+			current.template && key == "--name"
 		if !hasValue || input == "" || current.seen[key] && !repeatable {
 			return Strategy{}, bad
 		}
 		current.seen[key] = true
 		switch key {
 		case "--name":
-			current.ID = input
+			current.ID, current.named = input, true
 		case "--filter-l3":
 			switch input {
 			case "ipv4,ipv6", "ipv6,ipv4":
-				// Explicitly matching both is identical to the engine default.
+				current.addFamily("")
 			case string(IPv4), string(IPv6):
-				current.Family = AddressFamily(input)
+				current.addFamily(AddressFamily(input))
 			default:
 				return Strategy{}, bad
 			}
@@ -127,18 +176,7 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 			if err != nil {
 				return Strategy{}, token.invalid(err)
 			}
-			// The engine denies an omitted transport when another is specified.
-			if len(ports) == 0 {
-				continue
-			}
-			switch {
-			case current.Protocol == "":
-				current.Protocol, current.PortRanges = protocol, ports
-			case protocol == intent.PacketProtocolTCP:
-				current.Protocol, current.PortRanges, current.UDPRanges = protocol, ports, current.PortRanges
-			default:
-				current.UDPRanges = ports
-			}
+			current.addPortFilters(protocol, ports)
 		case "--filter-l7":
 			if !validNativeSelector(input, nativeL7Names) {
 				return Strategy{}, bad
@@ -255,16 +293,32 @@ func parseNativeWithLua(id, text string, managed []LuaReference) (Strategy, erro
 			current.actionOrder = append(current.actionOrder, NativeActionRef{Kind: nativeActionBuiltin, Payload: current.Payload})
 			current.OutRange, current.outRangePending = current.outRange, false
 		default:
-			if current.Lists == nil {
-				current.Lists = new(NativeLists)
+			if slot := current.declaredListRefs.slot(key); slot != nil {
+				id := presetAssetID(unquotePresetPath(input), "lists/", ".txt")
+				if lists == nil || id == "" {
+					return Strategy{}, token.invalid(fmt.Errorf("%w: templates can reference catalog lists as lists/<managed-id>.txt; host paths are never read", ErrInvalidStrategy))
+				}
+				*slot = id
+				if err := current.listRefs.merge(current.declaredListRefs); err != nil {
+					return Strategy{}, token.invalid(err)
+				}
+				continue
 			}
-			if !current.Lists.set(key, input) {
+			var lists NativeLists
+			if !lists.set(key, input) {
 				return Strategy{}, bad
+			}
+			current.Lists, err = mergeTemplateLists(current.Lists, &lists)
+			if err != nil {
+				return Strategy{}, token.invalid(err)
 			}
 		}
 	}
 	if err := finish(); err != nil {
 		return Strategy{}, err
+	}
+	if len(value.Profiles) == 0 {
+		return Strategy{}, fmt.Errorf("%w: templates do not run; add an active profile", ErrInvalidStrategy)
 	}
 	value.Assets = nativeAssets(value.Profiles)
 	return value, nil
